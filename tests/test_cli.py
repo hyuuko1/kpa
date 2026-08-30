@@ -32,9 +32,16 @@ def test_cli_fetch_success(tmp_path: Path):
 
 def test_cli_fetch_safety_violation():
     runner = CliRunner()
-    result = runner.invoke(main, ["fetch", "--query", "l:linux-mm AND d:10.hours.ago.."])
+    # Big granularity prohibited
+    result = runner.invoke(main, ["fetch", "--query", "l:linux-mm AND d:1.day.ago.."])
     assert result.exit_code != 0
     assert "安全限制" in result.output
+
+    # Missing d: filter prohibited
+    result2 = runner.invoke(main, ["fetch", "--query", "l:linux-mm.kvack.org"])
+    assert result2.exit_code != 0
+    assert "安全限制" in result2.output
+
 
 
 def test_cli_fetch_lore_error():

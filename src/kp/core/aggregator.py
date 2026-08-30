@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Dict, List, Optional, Tuple
-from kp.models import RawMessage, PatchItem, Patchset
+from kp.models import RawMessage, Patchset
 
 
 class UnionFind:
@@ -29,11 +29,16 @@ class UnionFind:
 class PatchsetAggregator:
     """将 RawMessage 列表清洗并聚合为 Patchset 列表"""
 
+    REPLY_PREFIX_RE = re.compile(r"^(?:re|aw|fwd|sv)\s*:", re.IGNORECASE)
     SUBJECT_RE = re.compile(
         r"\[(?P<tag>[^\]]*\bPATCH\b[^\]]*)\]\s*(?P<rest>.*)",
         re.IGNORECASE,
     )
     FRACTION_RE = re.compile(r"\b(\d+)/(\d+)\b")
+
+    def is_reply(self, subject: str) -> bool:
+        """判断邮件主题是否为回复"""
+        return bool(self.REPLY_PREFIX_RE.match(subject.strip()))
 
     def parse_subject_meta(self, subject: str) -> Tuple[bool, int, int]:
         """解析邮件主题，返回 (is_cover_letter, index, total)"""
@@ -48,7 +53,7 @@ class PatchsetAggregator:
                 return (is_cover, idx, tot)
             return (False, 1, 1)
 
-        # 非标准 patch 标签（如仅有 RFC 或普通提交），默认当做独立 patch
+        # 非标准 patch 标签，默认当做独立 patch
         return (False, 1, 1)
 
     def parse_subject(self, subject: str) -> Tuple[bool, int, int, str]:
@@ -69,7 +74,7 @@ class PatchsetAggregator:
         return author_name, author_email
 
     def aggregate(self, messages: List[RawMessage]) -> List[Patchset]:
-        """按线程和引用关系聚合并生成 Patchset 列表"""
+        """按线程和引用关系聚合并生成 Patchset 列表（自动过滤回复）"""
         if not messages:
             return []
 
@@ -99,26 +104,28 @@ class PatchsetAggregator:
         result: List[Patchset] = []
         for root_id, cluster_msgs in clusters.items():
             cover_msg: Optional[RawMessage] = None
-            patches: List[PatchItem] = []
-            max_total = 1
+            # 存储 (index, title, msg_id, date, msg)
+            raw_patches: List[Tuple[int, str, str, Optional[str], RawMessage]] = []
 
             for msg in cluster_msgs:
+                # 过滤回复邮件 (如 Re: [PATCH ...])
+                if self.is_reply(msg.s):
+                    continue
+
                 is_cov, idx, tot = self.parse_subject_meta(msg.s)
-                if tot > max_total:
-                    max_total = tot
 
                 if is_cov:
                     cover_msg = msg
                 else:
-                    patches.append(
-                        PatchItem(
-                            index=idx,
-                            total=tot,
-                            title=msg.s,
-                            message_id=msg.m,
-                            date=msg.dt,
-                        )
-                    )
+                    raw_patches.append((idx, msg.s, msg.m, msg.dt, msg))
+
+            # 如果该 cluster 全是回复邮件，无有效 cover letter 或 patch，则跳过
+            if not cover_msg and not raw_patches:
+                continue
+
+            # 按 index 升序排序
+            raw_patches.sort(key=lambda item: item[0])
+            patch_titles = [item[1] for item in raw_patches]
 
             # 确定代表性 ID、Title、作者和时间
             if cover_msg:
@@ -126,25 +133,12 @@ class PatchsetAggregator:
                 title = cover_msg.s
                 author_name, author_email = self._extract_author(cover_msg)
                 date = cover_msg.dt
-                is_cover = True
             else:
-                # 无 cover letter 时按 index 升序排序
-                patches.sort(key=lambda p: p.index)
-                if patches:
-                    rep_id = patches[0].message_id
-                    title = patches[0].title
-                    first_msg = msg_map.get(patches[0].message_id)
-                    author_name, author_email = self._extract_author(first_msg)
-                    date = patches[0].date
-                else:
-                    rep_id = root_id
-                    title = "Patchset"
-                    author_name, author_email = "Unknown", "unknown@kernel.org"
-                    date = None
-                is_cover = False
-
-            patches.sort(key=lambda p: p.index)
-            total_patches = max(max_total, len(patches))
+                rep_id = raw_patches[0][2]
+                title = raw_patches[0][1]
+                first_msg = raw_patches[0][4]
+                author_name, author_email = self._extract_author(first_msg)
+                date = raw_patches[0][3]
 
             ps = Patchset(
                 id=rep_id,
@@ -152,12 +146,11 @@ class PatchsetAggregator:
                 author_name=author_name,
                 author_email=author_email,
                 date=date,
-                is_cover_letter=is_cover,
-                total_patches=total_patches,
-                patches=patches,
+                patches=patch_titles,
             )
             result.append(ps)
 
         # 4. 按提交日期降序排列
         result.sort(key=lambda ps: ps.date or "", reverse=True)
         return result
+

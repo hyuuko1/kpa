@@ -33,14 +33,22 @@ class AppConfig(BaseModel):
 
 def load_config(config_path: Optional[Path] = None) -> AppConfig:
     """加载配置：优先指定路径 -> ./kp.toml -> ./config.toml -> ~/.config/kp/config.toml -> 默认"""
-    search_paths = []
-    if config_path:
-        search_paths.append(Path(config_path))
-    search_paths.extend([
+    if config_path is not None:
+        p = Path(config_path)
+        if p.is_file():
+            try:
+                with open(p, "rb") as f:
+                    data = tomllib.load(f)
+                return AppConfig.model_validate(data)
+            except Exception:
+                pass
+        return AppConfig()
+
+    search_paths = [
         Path("kp.toml"),
         Path("config.toml"),
         Path.home() / ".config" / "kp" / "config.toml",
-    ])
+    ]
 
     for p in search_paths:
         if p.is_file():
@@ -52,3 +60,4 @@ def load_config(config_path: Optional[Path] = None) -> AppConfig:
                 continue
 
     return AppConfig()
+

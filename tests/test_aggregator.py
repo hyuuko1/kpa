@@ -87,15 +87,9 @@ def test_aggregate_series_with_cover_letter():
     assert ps.author_name == "Dev"
     assert ps.author_email == "dev@kernel.org"
     assert ps.date == "2026-08-30T10:00:00Z"
-    assert ps.is_cover_letter is True
-    assert ps.total_patches == 2
     assert len(ps.patches) == 2
-    assert ps.patches[0].index == 1
-    assert ps.patches[0].title == "[PATCH 1/2] mm/test: part 1"
-    assert ps.patches[0].message_id == "patch1@1"
-    assert ps.patches[1].index == 2
-    assert ps.patches[1].title == "[PATCH 2/2] mm/test: part 2"
-    assert ps.patches[1].message_id == "patch2@1"
+    assert ps.patches[0] == "[PATCH 1/2] mm/test: part 1"
+    assert ps.patches[1] == "[PATCH 2/2] mm/test: part 2"
 
 def test_aggregate_standalone_patches():
     aggregator = PatchsetAggregator()
@@ -116,12 +110,8 @@ def test_aggregate_standalone_patches():
     assert ps.author_name == "Alice"
     assert ps.author_email == "alice@kernel.org"
     assert ps.date == "2026-08-30T11:00:00Z"
-    assert ps.is_cover_letter is False
-    assert ps.total_patches == 1
     assert len(ps.patches) == 1
-    assert ps.patches[0].title == "[PATCH] mm/slab: fix typo"
-    assert ps.patches[0].index == 1
-    assert ps.patches[0].total == 1
+    assert ps.patches[0] == "[PATCH] mm/slab: fix typo"
 
 def test_aggregate_series_without_cover_letter_out_of_order():
     aggregator = PatchsetAggregator()
@@ -149,14 +139,10 @@ def test_aggregate_series_without_cover_letter_out_of_order():
     assert ps.title == "[PATCH 1/2] mm/test: part 1"
     assert ps.author_name == "Bob"
     assert ps.author_email == "bob@kernel.org"
-    assert ps.is_cover_letter is False
-    assert ps.total_patches == 2
     assert len(ps.patches) == 2
     # Ensure patches are sorted by index
-    assert ps.patches[0].index == 1
-    assert ps.patches[0].title == "[PATCH 1/2] mm/test: part 1"
-    assert ps.patches[1].index == 2
-    assert ps.patches[1].title == "[PATCH 2/2] mm/test: part 2"
+    assert ps.patches[0] == "[PATCH 1/2] mm/test: part 1"
+    assert ps.patches[1] == "[PATCH 2/2] mm/test: part 2"
 
 def test_aggregate_empty_messages():
     aggregator = PatchsetAggregator()
@@ -229,9 +215,55 @@ def test_aggregate_chained_threading():
     assert len(patchsets) == 1
     ps = patchsets[0]
     assert ps.id == "cover@chain"
-    assert ps.total_patches == 3
     assert len(ps.patches) == 3
-    assert [p.index for p in ps.patches] == [1, 2, 3]
+    assert ps.patches == [
+        "[PATCH 1/3] part 1",
+        "[PATCH 2/3] part 2",
+        "[PATCH 3/3] part 3",
+    ]
+
+def test_aggregate_filter_replies():
+    aggregator = PatchsetAggregator()
+    raw_msgs = [
+        RawMessage(
+            m="patch1@test",
+            s="[PATCH 1/2] mm: feature part 1",
+            f=[["Author", "author@kernel.org"]],
+            dt="2026-08-30T10:00:00Z",
+            refs=[]
+        ),
+        RawMessage(
+            m="reply1@test",
+            s="Re: [PATCH 1/2] mm: feature part 1",
+            f=[["Reviewer", "reviewer@kernel.org"]],
+            dt="2026-08-30T10:05:00Z",
+            refs=["patch1@test"]
+        ),
+        RawMessage(
+            m="patch2@test",
+            s="[PATCH 2/2] mm: feature part 2",
+            f=[["Author", "author@kernel.org"]],
+            dt="2026-08-30T10:01:00Z",
+            refs=["patch1@test"]
+        ),
+        RawMessage(
+            m="standalone_reply@test",
+            s="Re: [PATCH] some older patch",
+            f=[["Reviewer2", "reviewer2@kernel.org"]],
+            dt="2026-08-30T10:10:00Z",
+            refs=[]
+        )
+    ]
+    patchsets = aggregator.aggregate(raw_msgs)
+    # The standalone reply should be discarded, only the valid patchset remains
+    assert len(patchsets) == 1
+    ps = patchsets[0]
+    assert ps.id == "patch1@test"
+    assert len(ps.patches) == 2
+    assert ps.patches == [
+        "[PATCH 1/2] mm: feature part 1",
+        "[PATCH 2/2] mm: feature part 2",
+    ]
 
 def test_aggregate_author_fallbacks():
     aggregator = PatchsetAggregator()
@@ -278,7 +310,6 @@ def test_aggregate_partial_series():
     patchsets = aggregator.aggregate(raw_msgs)
     assert len(patchsets) == 1
     ps = patchsets[0]
-    assert ps.total_patches == 4
     assert len(ps.patches) == 1
-    assert ps.patches[0].index == 2
-    assert ps.patches[0].total == 4
+    assert ps.patches[0] == "[PATCH 2/4] part 2"
+

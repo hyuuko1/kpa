@@ -3,7 +3,7 @@ import json
 import re
 from kp.config import StorageConfig
 from kp.storage.session import SessionManager
-from kp.models import RunManifest, RawMessage, Patchset, PatchItem
+from kp.models import RunManifest, RawMessage, Patchset
 
 
 def test_session_manager_create_session_dir(tmp_path: Path):
@@ -43,20 +43,13 @@ def test_session_manager_save_and_structure(tmp_path: Path):
             title="[PATCH 1/1] mm: test patch with 中文",
             author_name="Author Name (作者)",
             author_email="a@b.com",
-            total_patches=1,
-            patches=[
-                PatchItem(
-                    index=1,
-                    total=1,
-                    title="[PATCH 1/1] mm: test patch with 中文",
-                    message_id="m1@kernel.org",
-                )
-            ],
+            patches=["[PATCH 1/1] mm: test patch with 中文"],
         )
     ]
     prompt_content = "# Test Prompt with 中文内容\n\n- item 1"
 
     mgr.save_run(run_dir, manifest, raw_msgs, patchsets, prompt_content)
+
 
     manifest_file = run_dir / "manifest.json"
     raw_file = run_dir / "raw_metadata.json"

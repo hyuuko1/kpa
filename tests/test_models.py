@@ -1,4 +1,4 @@
-from kp.models import RawMessage, PatchItem, Patchset, RunManifest
+from kp.models import RawMessage, Patchset, RunManifest
 
 def test_raw_message_parsing():
     raw_dict = {
@@ -38,55 +38,24 @@ def test_raw_message_optional_fields():
     assert msg.c == [["Reviewer", "cc@example.com"]]
     assert msg.refs == []
 
-def test_patch_item():
-    patch = PatchItem(
-        index=1,
-        total=2,
-        title="[PATCH 1/2] mm: sample fix 1",
-        message_id="patch1@msgid",
-        date="2026-08-30T10:00:00Z"
-    )
-    assert patch.index == 1
-    assert patch.total == 2
-    assert patch.title == "[PATCH 1/2] mm: sample fix 1"
-    assert patch.message_id == "patch1@msgid"
-    assert patch.date == "2026-08-30T10:00:00Z"
-
-def test_patch_item_optional_date():
-    patch = PatchItem(
-        index=1,
-        total=1,
-        title="[PATCH] fix typo",
-        message_id="patch@msgid",
-    )
-    assert patch.date is None
-
 def test_patchset_structure():
-    patch1 = PatchItem(
-        index=1,
-        total=2,
-        title="[PATCH 1/2] mm: sample fix 1",
-        message_id="patch1@msgid",
-        date="2026-08-30T10:00:00Z"
-    )
     patchset = Patchset(
         id="cover@msgid",
         title="[PATCH 0/2] mm: sample series",
         author_name="John Doe",
         author_email="john@example.com",
         date="2026-08-30T10:00:00Z",
-        is_cover_letter=True,
-        total_patches=2,
-        patches=[patch1]
+        patches=[
+            "[PATCH 1/2] mm: sample fix 1",
+            "[PATCH 2/2] mm: sample fix 2",
+        ],
     )
     assert patchset.id == "cover@msgid"
     assert patchset.title == "[PATCH 0/2] mm: sample series"
     assert patchset.author_name == "John Doe"
     assert patchset.author_email == "john@example.com"
-    assert patchset.is_cover_letter is True
-    assert patchset.total_patches == 2
-    assert len(patchset.patches) == 1
-    assert patchset.patches[0].index == 1
+    assert len(patchset.patches) == 2
+    assert patchset.patches[0] == "[PATCH 1/2] mm: sample fix 1"
 
 def test_patchset_defaults():
     patchset = Patchset(
@@ -95,10 +64,9 @@ def test_patchset_defaults():
         author_name="Jane Doe",
         author_email="jane@example.com",
     )
-    assert patchset.is_cover_letter is False
-    assert patchset.total_patches == 1
     assert patchset.patches == []
     assert patchset.date is None
+
 
 def test_run_manifest():
     manifest = RunManifest(
