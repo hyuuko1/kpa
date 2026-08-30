@@ -9,18 +9,20 @@ class Stage3PromptBuilder:
 
     TEMPLATE = """# Linux 内核补丁深度技术分析任务 (阶段三)
 
-你是一位资深的 Linux 内核维护者与核心子系统架构专家。本次运行（Run ID: `{run_id}`）已完成补丁集筛选并拉取、结构化清洗了高价值补丁集的完整邮件讨论与代码 Diff。
+你是一位资深的 Linux 内核维护者与核心子系统架构专家。本次运行（Run ID: `{run_id}`）已完成补丁集筛选并拉取、清洗了高价值补丁集。
 
-请对以下清洗后的补丁集结构化数据文件（`parsed_series.json`）进行深入的技术评审与架构影响分析：
+所有补丁集均已按“**AI 直读友好型**”结构拆解并组织在对应的目录中，你可以直接使用文件查看工具阅读，无需编写脚本解析：
 
-## 目标补丁集数据源
+## 目标补丁集目录列表
 {patchsets_list}
 
-每个补丁集 JSON 文件包含：
-- `id` / `title` / `total_patches`：补丁集标识与规模
-- `cover_letter`：系列说明、背景动机与总体 Diffstat
-- `patches`：包含每个 Patch 的提交日志（Commit Message）、签名信息（Trailers）、代码变更（Unified Diff）
-- `comments` / `general_comments`：完整的社区 Maintainer / Reviewer 树形评审讨论与作者回复
+## 补丁集目录结构说明
+每个补丁集目录下均包含以下文件（可直接按需读取）：
+- `00-cover-letter.md`：系列背景说明、整体动机与总体 Diffstat（若有多补丁系列）
+- `discussions.md`：社区 Maintainer / Reviewer 的审阅评论与辩论树（直读 Markdown 引用格式）
+- `patches/`：独立的代码补丁文件（如 `0001-xxx.patch`，包含完整的 Commit Message、Trailers 与统一 Diff）
+- `meta.json`：轻量级索引元数据
+- `parsed_series.json`：全量结构化 JSON 数据（可选）
 
 ## 深度分析核心维度与指引
 针对每个补丁集，请重点从以下维度开展多角度深入分析：
@@ -71,7 +73,11 @@ class Stage3PromptBuilder:
         if not parsed_patchsets_paths:
             patchsets_str = "- (本次未拉取或解析到任何补丁集数据)"
         else:
-            patchsets_str = "\n".join(f"- `{str(p.resolve())}`" for p in parsed_patchsets_paths)
+            items = []
+            for p in parsed_patchsets_paths:
+                p_dir = p.parent if p.is_file() else p
+                items.append(f"- 目录: `{str(p_dir.resolve())}`\n  - 主数据: `{str(p.resolve())}`")
+            patchsets_str = "\n".join(items)
 
         return self.TEMPLATE.format(
             run_id=run_id,

@@ -7,6 +7,13 @@ from pathlib import Path
 from typing import List, Tuple
 from kp.config import StorageConfig
 from kp.models import RawMessage, Patchset, RunManifest, PatchReview, ParsedPatchset
+from kp.core.formatters import (
+    render_cover_letter_md,
+    render_discussions_md,
+    render_patch_file,
+    render_meta_json,
+    sanitize_filename,
+)
 
 
 class SessionManager:
@@ -86,8 +93,36 @@ class SessionManager:
     ) -> Path:
         patchset_dir = run_dir / "patchsets" / sanitized_id
         patchset_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1. 保存全量 parsed_series.json
         parsed_file = patchset_dir / "parsed_series.json"
         parsed_file.write_text(parsed_patchset.model_dump_json(indent=2), encoding="utf-8")
+
+        # 2. 保存轻量元数据 meta.json
+        meta_file = patchset_dir / "meta.json"
+        meta_dict = render_meta_json(parsed_patchset)
+        meta_file.write_text(json.dumps(meta_dict, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        # 3. 保存直读 00-cover-letter.md（若存在 Cover Letter）
+        if parsed_patchset.cover_letter:
+            cover_file = patchset_dir / "00-cover-letter.md"
+            cover_file.write_text(render_cover_letter_md(parsed_patchset.cover_letter), encoding="utf-8")
+
+        # 4. 保存直读 discussions.md（若存在讨论）
+        if parsed_patchset.general_comments or any(p.comments for p in parsed_patchset.patches):
+            disc_file = patchset_dir / "discussions.md"
+            disc_file.write_text(render_discussions_md(parsed_patchset), encoding="utf-8")
+
+        # 5. 保存独立 patches/ 目录
+        if parsed_patchset.patches:
+            patches_dir = patchset_dir / "patches"
+            patches_dir.mkdir(parents=True, exist_ok=True)
+            for patch in parsed_patchset.patches:
+                patch_clean_title = sanitize_filename(patch.subject, max_len=40)
+                patch_fname = f"{patch.index:04d}-{patch_clean_title}.patch"
+                patch_fpath = patches_dir / patch_fname
+                patch_fpath.write_text(render_patch_file(patch), encoding="utf-8")
+
         return parsed_file
 
     def save_stage3_prompt(self, run_dir: Path, prompt_content: str) -> Path:

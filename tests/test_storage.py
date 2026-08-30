@@ -4,7 +4,16 @@ import re
 import pytest
 from kp.config import StorageConfig
 from kp.storage.session import SessionManager
-from kp.models import RunManifest, RawMessage, Patchset, PatchReview, ParsedPatchset, ParsedPatch
+from kp.models import (
+    RunManifest,
+    RawMessage,
+    Patchset,
+    PatchReview,
+    ParsedPatchset,
+    ParsedPatch,
+    ParsedComment,
+    ParsedCoverLetter,
+)
 
 
 def test_session_manager_create_session_dir(tmp_path: Path):
@@ -168,10 +177,23 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
     run_dir = tmp_path / "run_parsed"
     run_dir.mkdir(parents=True)
 
+    c1 = ParsedComment(
+        author="Reviewer <rev@kernel.org>",
+        message_id="c1",
+        body="Nice fix, but check locking.",
+    )
+
     parsed = ParsedPatchset(
         id="patch1@domain.org",
         title="[PATCH] fix memory leak",
         total_patches=1,
+        cover_letter=ParsedCoverLetter(
+            subject="[PATCH 0/1] fix memory leak",
+            author="Bob <bob@kernel.org>",
+            message_id="cover1",
+            body="Cover letter description.",
+            diffstat="drv.c | 2 +-\n 1 file changed",
+        ),
         patches=[
             ParsedPatch(
                 index=1,
@@ -182,6 +204,7 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
                 commit_message="Fix memory leak in driver",
                 trailers=["Signed-off-by: Bob <bob@kernel.org>"],
                 diff="--- a/drv.c\n+++ b/drv.c",
+                comments=[c1],
             )
         ],
     )
@@ -196,6 +219,21 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
     assert content["id"] == "patch1@domain.org"
     assert len(content["patches"]) == 1
     assert content["patches"][0]["author"] == "Bob <bob@kernel.org>"
+
+    # 验证 AI 直读友好型文件
+    meta_file = run_dir / "patchsets" / "patch1_domain_org" / "meta.json"
+    cover_file = run_dir / "patchsets" / "patch1_domain_org" / "00-cover-letter.md"
+    disc_file = run_dir / "patchsets" / "patch1_domain_org" / "discussions.md"
+    patches_dir = run_dir / "patchsets" / "patch1_domain_org" / "patches"
+
+    assert meta_file.exists()
+    assert cover_file.exists()
+    assert disc_file.exists()
+    assert patches_dir.exists()
+
+    patch_files = list(patches_dir.glob("*.patch"))
+    assert len(patch_files) == 1
+    assert "0001" in patch_files[0].name
 
 
 def test_session_manager_save_stage3_prompt(tmp_path: Path):
