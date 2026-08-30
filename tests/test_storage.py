@@ -1,9 +1,10 @@
 from pathlib import Path
 import json
 import re
+import pytest
 from kp.config import StorageConfig
 from kp.storage.session import SessionManager
-from kp.models import RunManifest, RawMessage, Patchset
+from kp.models import RunManifest, RawMessage, Patchset, PatchReview, ParsedPatchset, ParsedPatch
 
 
 def test_session_manager_create_session_dir(tmp_path: Path):
@@ -50,7 +51,6 @@ def test_session_manager_save_and_structure(tmp_path: Path):
 
     mgr.save_run(run_dir, manifest, raw_msgs, patchsets, prompt_content)
 
-
     manifest_file = run_dir / "manifest.json"
     raw_file = run_dir / "raw_metadata.json"
     patchsets_file = run_dir / "patchsets.json"
@@ -82,3 +82,132 @@ def test_session_manager_save_and_structure(tmp_path: Path):
     with open(prompt_file, "r", encoding="utf-8") as f:
         prompt_read = f.read()
         assert prompt_read == prompt_content
+
+
+def test_session_manager_get_run_dir(tmp_path: Path):
+    config = StorageConfig(data_dir=str(tmp_path))
+    mgr = SessionManager(config)
+    run_dir = mgr.get_run_dir("20260830_120000_123456")
+    assert run_dir == tmp_path / "20260830_120000_123456"
+
+
+def test_session_manager_load_patchsets(tmp_path: Path):
+    config = StorageConfig(data_dir=str(tmp_path))
+    mgr = SessionManager(config)
+    run_dir = tmp_path / "test_run"
+    run_dir.mkdir(parents=True)
+
+    patchsets_data = [
+        {
+            "id": "patch1@kernel.org",
+            "title": "[PATCH] mm: fix bug",
+            "author_name": "Alice",
+            "author_email": "alice@kernel.org",
+            "patches": ["[PATCH] mm: fix bug"],
+        }
+    ]
+    (run_dir / "patchsets.json").write_text(json.dumps(patchsets_data), encoding="utf-8")
+
+    loaded = mgr.load_patchsets(run_dir)
+    assert len(loaded) == 1
+    assert loaded[0].id == "patch1@kernel.org"
+    assert loaded[0].title == "[PATCH] mm: fix bug"
+    assert loaded[0].author_name == "Alice"
+
+
+def test_session_manager_load_patchsets_not_found(tmp_path: Path):
+    config = StorageConfig(data_dir=str(tmp_path))
+    mgr = SessionManager(config)
+    empty_dir = tmp_path / "empty_run"
+    empty_dir.mkdir(parents=True)
+
+    with pytest.raises(FileNotFoundError):
+        mgr.load_patchsets(empty_dir)
+
+
+def test_session_manager_save_reviews(tmp_path: Path):
+    config = StorageConfig(data_dir=str(tmp_path))
+    mgr = SessionManager(config)
+    run_dir = tmp_path / "run_rev"
+    run_dir.mkdir(parents=True)
+
+    reviews = [
+        PatchReview(id="msg1", title="title1", score=90, recommend=True, reason="Great patch"),
+        PatchReview(id="msg2", title="title2", score=50, recommend=False, reason="Minor tweak"),
+    ]
+    filtered_patchsets = [
+        Patchset(
+            id="msg1",
+            title="title1",
+            author_name="Alice",
+            author_email="a@b.c",
+            patches=["[PATCH] title1"],
+        )
+    ]
+
+    mgr.save_reviews(run_dir, reviews, filtered_patchsets)
+
+    reviews_file = run_dir / "reviews.json"
+    filtered_file = run_dir / "filtered_patchsets.json"
+
+    assert reviews_file.exists()
+    assert filtered_file.exists()
+
+    loaded_reviews = json.loads(reviews_file.read_text(encoding="utf-8"))
+    assert len(loaded_reviews) == 2
+    assert loaded_reviews[0]["score"] == 90
+
+    loaded_filtered = json.loads(filtered_file.read_text(encoding="utf-8"))
+    assert len(loaded_filtered) == 1
+    assert loaded_filtered[0]["id"] == "msg1"
+
+
+def test_session_manager_save_parsed_patchset(tmp_path: Path):
+    config = StorageConfig(data_dir=str(tmp_path))
+    mgr = SessionManager(config)
+    run_dir = tmp_path / "run_parsed"
+    run_dir.mkdir(parents=True)
+
+    parsed = ParsedPatchset(
+        id="patch1@domain.org",
+        title="[PATCH] fix memory leak",
+        total_patches=1,
+        patches=[
+            ParsedPatch(
+                index=1,
+                total=1,
+                subject="[PATCH] fix memory leak",
+                author="Bob <bob@kernel.org>",
+                message_id="patch1@domain.org",
+                commit_message="Fix memory leak in driver",
+                trailers=["Signed-off-by: Bob <bob@kernel.org>"],
+                diff="--- a/drv.c\n+++ b/drv.c",
+            )
+        ],
+    )
+
+    saved_path = mgr.save_parsed_patchset(run_dir, "patch1_domain_org", parsed)
+
+    expected_path = run_dir / "patchsets" / "patch1_domain_org" / "parsed_series.json"
+    assert saved_path == expected_path
+    assert expected_path.exists()
+
+    content = json.loads(expected_path.read_text(encoding="utf-8"))
+    assert content["id"] == "patch1@domain.org"
+    assert len(content["patches"]) == 1
+    assert content["patches"][0]["author"] == "Bob <bob@kernel.org>"
+
+
+def test_session_manager_save_stage3_prompt(tmp_path: Path):
+    config = StorageConfig(data_dir=str(tmp_path))
+    mgr = SessionManager(config)
+    run_dir = tmp_path / "run_prompt3"
+    run_dir.mkdir(parents=True)
+
+    prompt_text = "# Stage 3 Deep Analysis\n\nPlease analyze the patches."
+    saved_path = mgr.save_stage3_prompt(run_dir, prompt_text)
+
+    expected_path = run_dir / "stage3_prompt.md"
+    assert saved_path == expected_path
+    assert expected_path.exists()
+    assert expected_path.read_text(encoding="utf-8") == prompt_text

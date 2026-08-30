@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
 from kp.config import StorageConfig
-from kp.models import RawMessage, Patchset, RunManifest
+from kp.models import RawMessage, Patchset, RunManifest, PatchReview, ParsedPatchset
 
 
 class SessionManager:
@@ -26,6 +26,17 @@ class SessionManager:
         run_dir = base_dir / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_id, run_dir
+
+    def get_run_dir(self, run_id: str) -> Path:
+        base_dir = Path(self.config.data_dir)
+        return base_dir / run_id
+
+    def load_patchsets(self, run_dir: Path) -> List[Patchset]:
+        patchsets_file = run_dir / "patchsets.json"
+        if not patchsets_file.exists():
+            raise FileNotFoundError(f"patchsets.json not found in {run_dir}")
+        data = json.loads(patchsets_file.read_text(encoding="utf-8"))
+        return [Patchset.model_validate(item) for item in data]
 
     def save_run(
         self,
@@ -52,3 +63,34 @@ class SessionManager:
         # 4. 保存 prompt.md
         prompt_file = run_dir / "prompt.md"
         prompt_file.write_text(prompt_content, encoding="utf-8")
+
+    def save_reviews(
+        self,
+        run_dir: Path,
+        reviews: List[PatchReview],
+        filtered_patchsets: List[Patchset],
+    ) -> None:
+        reviews_file = run_dir / "reviews.json"
+        reviews_list = [r.model_dump() for r in reviews]
+        reviews_file.write_text(json.dumps(reviews_list, indent=2, ensure_ascii=False), encoding="utf-8")
+
+        filtered_file = run_dir / "filtered_patchsets.json"
+        filtered_list = [ps.model_dump() for ps in filtered_patchsets]
+        filtered_file.write_text(json.dumps(filtered_list, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def save_parsed_patchset(
+        self,
+        run_dir: Path,
+        sanitized_id: str,
+        parsed_patchset: ParsedPatchset,
+    ) -> Path:
+        patchset_dir = run_dir / "patchsets" / sanitized_id
+        patchset_dir.mkdir(parents=True, exist_ok=True)
+        parsed_file = patchset_dir / "parsed_series.json"
+        parsed_file.write_text(parsed_patchset.model_dump_json(indent=2), encoding="utf-8")
+        return parsed_file
+
+    def save_stage3_prompt(self, run_dir: Path, prompt_content: str) -> Path:
+        prompt_file = run_dir / "stage3_prompt.md"
+        prompt_file.write_text(prompt_content, encoding="utf-8")
+        return prompt_file
