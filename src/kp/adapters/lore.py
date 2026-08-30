@@ -5,7 +5,7 @@ import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 from kp.config import LoreConfig, SafetyConfig
 from kp.models import RawMessage
 
