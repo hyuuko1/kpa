@@ -1,0 +1,11 @@
+[safety]
+# 最大允许查询时间跨度（分钟），默认 180 分钟（3 小时）
+max_time_span_minutes = 3600
+# 是否强制要求 query 必须包含 d: 时间范围
+require_time_filter = true
+
+[lore]
+# 默认使用的 lore public-inbox 地址
+inbox_url = "https://lore.kernel.org/all/"
+# lei 命令执行超时时间（秒）
+timeout_seconds = 60
