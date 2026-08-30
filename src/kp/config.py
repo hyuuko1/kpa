@@ -25,10 +25,16 @@ class StorageConfig(BaseModel):
     data_dir: str = "data/runs"
 
 
+class B4Config(BaseModel):
+    timeout_seconds: int = 120
+
+
 class AppConfig(BaseModel):
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     lore: LoreConfig = Field(default_factory=LoreConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    b4: B4Config = Field(default_factory=B4Config)
+
 
 
 def load_config(config_path: Optional[Path] = None) -> AppConfig:

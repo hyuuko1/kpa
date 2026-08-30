@@ -1,4 +1,14 @@
-from kp.models import RawMessage, Patchset, RunManifest
+from kp.models import (
+    RawMessage,
+    Patchset,
+    RunManifest,
+    PatchReview,
+    ParsedComment,
+    ParsedCoverLetter,
+    ParsedPatch,
+    ParsedPatchset,
+)
+
 
 def test_raw_message_parsing():
     raw_dict = {
@@ -87,3 +97,85 @@ def test_run_manifest():
     assert dumped["total_raw_messages"] == 5
     restored = RunManifest.model_validate(dumped)
     assert restored == manifest
+
+
+def test_patch_review_model():
+    review = PatchReview(id="msg123", score=85, recommend=True, reason="Important fix")
+    assert review.id == "msg123"
+    assert review.title is None
+    assert review.score == 85
+    assert review.recommend is True
+    assert review.reason == "Important fix"
+
+    review_with_title = PatchReview(
+        id="msg456", title="[PATCH] Fix mm", score=90, recommend=True, reason="Critical"
+    )
+    assert review_with_title.title == "[PATCH] Fix mm"
+
+
+def test_parsed_comment_tree_model():
+    child = ParsedComment(
+        author="Reviewer <rev@kernel.org>",
+        message_id="msg2",
+        in_reply_to="msg1",
+        body="Looks good, thanks.",
+    )
+    parent = ParsedComment(
+        author="Author <auth@kernel.org>",
+        message_id="msg1",
+        body="Please review this patch.",
+        replies=[child],
+    )
+    assert len(parent.replies) == 1
+    assert parent.replies[0].message_id == "msg2"
+    assert parent.replies[0].in_reply_to == "msg1"
+    assert parent.date is None
+    assert parent.in_reply_to is None
+
+    # JSON 往返测试
+    json_data = parent.model_dump_json()
+    loaded = ParsedComment.model_validate_json(json_data)
+    assert loaded.replies[0].author == "Reviewer <rev@kernel.org>"
+    assert loaded.replies[0].body == "Looks good, thanks."
+
+
+def test_parsed_cover_letter_model():
+    cover = ParsedCoverLetter(
+        subject="[PATCH 0/2] series introduction",
+        author="Dev <dev@test.org>",
+        message_id="cover1",
+        body="Series details",
+        diffstat="mm/page_alloc.c | 10 ++\n 1 file changed",
+    )
+    assert cover.subject == "[PATCH 0/2] series introduction"
+    assert cover.author == "Dev <dev@test.org>"
+    assert cover.date is None
+    assert cover.diffstat == "mm/page_alloc.c | 10 ++\n 1 file changed"
+
+
+def test_parsed_patchset_model():
+    patch = ParsedPatch(
+        index=1,
+        total=1,
+        subject="[PATCH] fix something",
+        author="Dev <dev@test.org>",
+        message_id="patch1",
+        commit_message="Fix a bug in mm",
+        trailers=["Signed-off-by: Dev <dev@test.org>"],
+        diff="--- a/mm.c\n+++ b/mm.c\n@@ ...",
+    )
+    assert patch.date is None
+    assert patch.diffstat is None
+    assert patch.comments == []
+
+    patchset = ParsedPatchset(
+        id="patch1",
+        title="[PATCH] fix something",
+        total_patches=1,
+        patches=[patch],
+    )
+    assert patchset.total_patches == 1
+    assert patchset.cover_letter is None
+    assert patchset.general_comments == []
+    assert len(patchset.patches) == 1
+

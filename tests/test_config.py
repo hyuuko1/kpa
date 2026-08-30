@@ -1,6 +1,6 @@
 from pathlib import Path
 import pytest
-from kp.config import load_config, AppConfig, SafetyConfig, LoreConfig, StorageConfig
+from kp.config import load_config, AppConfig, SafetyConfig, LoreConfig, StorageConfig, B4Config
 
 def test_load_default_config():
     config = load_config(config_path=Path("non_existent_file.toml"))
@@ -10,6 +10,9 @@ def test_load_default_config():
     assert config.lore.inbox_url == "https://lore.kernel.org/all/"
     assert config.lore.timeout_seconds == 60
     assert config.storage.data_dir == "data/runs"
+    assert isinstance(config.b4, B4Config)
+    assert config.b4.timeout_seconds == 120
+
 
 def test_load_custom_toml_config(tmp_path: Path):
     custom_toml = tmp_path / "custom.toml"
@@ -78,3 +81,14 @@ data_dir = "home_config_runs"
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     config = load_config()
     assert config.storage.data_dir == "home_config_runs"
+
+
+def test_load_config_with_b4_section(tmp_path: Path):
+    custom_toml = tmp_path / "b4_config.toml"
+    custom_toml.write_text("""
+[b4]
+timeout_seconds = 180
+""", encoding="utf-8")
+    config = load_config(config_path=custom_toml)
+    assert config.b4.timeout_seconds == 180
+

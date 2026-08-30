@@ -32,3 +32,58 @@ class RunManifest(BaseModel):
     query: str                                              # 执行的查询语句
     total_raw_messages: int                                 # 原始消息数
     total_patchsets: int                                    # 聚合后的补丁集数
+
+
+class PatchReview(BaseModel):
+    """AI 打分与评审结果项"""
+    id: str                                                 # 补丁集代表性 Message-ID
+    title: Optional[str] = None                             # 补丁集标题
+    score: int = Field(ge=0, le=100)                        # 价值评分 (0-100)
+    recommend: bool                                         # 是否推荐深度分析
+    reason: str                                             # 推荐或打分理由
+
+
+class ParsedComment(BaseModel):
+    """邮件线程中的审阅与讨论回复（树形结构）"""
+    author: str                                             # 评论者 (Name <email>)
+    date: Optional[str] = None                              # 评论发送时间
+    message_id: str                                         # 评论邮件 Message-ID
+    in_reply_to: Optional[str] = None                       # 被回复的父邮件 Message-ID
+    body: str                                               # 评论正文（内联讨论与反馈）
+    replies: List[ParsedComment] = Field(default_factory=list) # 嵌套的子回复列表
+
+
+class ParsedCoverLetter(BaseModel):
+    """Cover Letter 结构化数据 (多 Patch 系列存在)"""
+    subject: str                                            # Cover Letter 标题
+    author: str                                             # 作者
+    date: Optional[str] = None                              # 发送时间
+    message_id: str                                         # Cover Letter Message-ID
+    body: str                                               # 说明正文与变更说明
+    diffstat: Optional[str] = None                          # 系列总体 Diffstat
+
+
+class ParsedPatch(BaseModel):
+    """清洗与拆解后的单个 Patch"""
+    index: int                                              # 补丁序号 (如 1, 2, ...)
+    total: int                                              # 补丁总数 (如 3)
+    subject: str                                            # 主题行
+    author: str                                             # 补丁作者
+    date: Optional[str] = None                              # 发送时间
+    message_id: str                                         # 补丁 Message-ID
+    commit_message: str                                     # 清洗后的 Git Commit 描述
+    trailers: List[str] = Field(default_factory=list)       # Signed-off-by / Reviewed-by 等
+    diffstat: Optional[str] = None                          # 变更统计
+    diff: str                                               # 统一 Diff 内容
+    comments: List[ParsedComment] = Field(default_factory=list) # 针对该 Patch 的审阅树
+
+
+class ParsedPatchset(BaseModel):
+    """清洗与解析后的完整 Patchset，直接供 AI Agent 在阶段三消费"""
+    id: str                                                 # 代表性 Message-ID
+    title: str                                              # 系列标题
+    total_patches: int                                      # 包含补丁总数
+    cover_letter: Optional[ParsedCoverLetter] = None        # Cover letter
+    patches: List[ParsedPatch] = Field(default_factory=list)# 各 Patch 结构列表
+    general_comments: List[ParsedComment] = Field(default_factory=list) # 针对整体的审阅树
+
