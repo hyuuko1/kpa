@@ -28,16 +28,16 @@
 │                     应用编排层                           │
 │               src/kp/core/pipeline.py                    │
 │   FetchPipeline (Validate -> Fetch -> Clean -> Persist)  │
-└──────────────┬─────────────────────────────┬─────────────┘
-               │                             │
-┌──────────────▼─────────────┐ ┌─────────────▼─────────────┐
-│       外部适配器层         │ │        领域核心层         │
-│    src/kp/adapters/        │ │      src/kp/core/         │
-│  - lore.py (lei 交互 &     │ │  - aggregator.py (聚合)   │
-│    d: 时间安全校验)        │ │  - prompt.py (提示词生成) │
-└──────────────┬─────────────┘ └─────────────┬─────────────┘
-               │                             │
-┌──────────────▼─────────────────────────────▼─────────────┐
+└──────┬─────────────────────┬─────────────────────┬───────┘
+       │                     │                     │
+┌──────▼─────┐ ┌─────────────▼─────────────┐ ┌─────▼───────┐
+│ 配置管理层 │ │        领域核心层         │ │外部适配器层│
+│src/kp/     │ │      src/kp/core/         │ │src/kp/     │
+│config.py   │ │  - aggregator.py (聚合)   │ │adapters/   │
+│config.toml │ │  - prompt.py (提示词生成) │ │- lore.py   │
+└────────────┘ └─────────────┬─────────────┘ └─────────────┘
+                             │
+┌────────────────────────────▼─────────────────────────────┐
 │                       存储持久化层                       │
 │                 src/kp/storage/session.py                │
 │             data/runs/<run_id>/ (JSON, MD)               │
@@ -46,7 +46,57 @@
 
 ---
 
-## 3. 数据模型定义 (Data Models)
+## 3. 配置系统设计 (Configuration)
+
+支持通过 TOML 格式配置文件管理全局及运行参数，加载优先级：
+1. CLI 命令行参数（显式覆盖）
+2. 项目工作区配置文件（`./kp.toml` 或 `./config.toml`）
+3. 用户全局配置文件（`~/.config/kp/config.toml`）
+4. 内置默认配置
+
+### 3.1 配置文件结构 (`kp.toml`)
+```toml
+[safety]
+# 最大允许查询时间跨度（分钟），默认 180 分钟（3 小时）
+max_time_span_minutes = 180
+# 是否强制要求 query 必须包含 d: 时间范围
+require_time_filter = true
+
+[lore]
+# 默认使用的 lore public-inbox 地址
+inbox_url = "https://lore.kernel.org/all/"
+# lei 命令执行超时时间（秒）
+timeout_seconds = 60
+
+[storage]
+# 数据持久化根目录
+data_dir = "data/runs"
+```
+
+### 3.2 配置模型 (`AppConfig`)
+```python
+from pydantic import BaseModel, Field
+
+class SafetyConfig(BaseModel):
+    max_time_span_minutes: int = 180
+    require_time_filter: bool = True
+
+class LoreConfig(BaseModel):
+    inbox_url: str = "https://lore.kernel.org/all/"
+    timeout_seconds: int = 60
+
+class StorageConfig(BaseModel):
+    data_dir: str = "data/runs"
+
+class AppConfig(BaseModel):
+    safety: SafetyConfig = Field(default_factory=SafetyConfig)
+    lore: LoreConfig = Field(default_factory=LoreConfig)
+    storage: StorageConfig = Field(default_factory=StorageConfig)
+```
+
+---
+
+## 4. 数据模型定义 (Data Models)
 
 ```python
 from pydantic import BaseModel, Field
@@ -94,24 +144,24 @@ class RunManifest(BaseModel):
 
 ---
 
-## 4. 适配器与安全校验 (LoreClient & Safety Validator)
+## 5. 适配器与安全校验 (LoreClient & Safety Validator)
 
-### 4.1 安全时间校验规则 (`SafetyValidator`)
-在调用 `lei q` 之前，必须对 `--query` 参数进行安全解析：
+### 5.1 安全时间校验规则 (`SafetyValidator`)
+在调用 `lei q` 之前，必须对 `--query` 参数进行安全解析，并结合配置项 `SafetyConfig` 进行校验：
 1. **强制存在时间过滤**：
-   - 检查 query 中是否包含 `d:` 过滤语法（如 `d:2.hours.ago..`、`d:90.minutes.ago..`）。
+   - 若 `require_time_filter=True`，检查 query 中是否包含 `d:` 过滤语法（如 `d:2.hours.ago..`、`d:90.minutes.ago..`）。
    - 若未提供 `d:` 条件，立即抛出 `SafetyValidationError`，阻止拉取全量数据。
 2. **时间跨度限制**：
    - **相对时间语法**：
-     - `d:X.hours.ago..`：校验 X <= 3；
-     - `d:X.minutes.ago..`：校验 X <= 180；
-     - 禁止使用 `day`, `week`, `month`, `year` 等大粒度跨度。
+     - `d:X.hours.ago..`：校验 $X \times 60 \le \text{max\_time\_span\_minutes}$（默认 180 分钟）；
+     - `d:X.minutes.ago..`：校验 $X \le \text{max\_time\_span\_minutes}$；
+     - 禁止使用 `day`, `week`, `month`, `year` 等大粒度跨度（除非配置放宽限制）。
    - **绝对时间语法**：
-     - `d:YYYY-MM-DDTHH:MM:SSZ..`：计算与当前时间的跨度，必须 <= 3 小时。
+     - `d:YYYY-MM-DDTHH:MM:SSZ..`：计算与当前时间的跨度，必须 $\le \text{max\_time\_span\_minutes}$。
    - 超出限制一律抛出 `SafetyValidationError`，并输出明确友好的修复提示。
 
-### 4.2 `LoreClient`
-- 命令构造：`lei q -t -I https://lore.kernel.org/all/ "<query>" -f json`
+### 5.2 `LoreClient`
+- 命令构造：`lei q -t -I <inbox_url> "<query>" -f json`
 - 执行与错误处理：
   - 验证 `lei` 二进制是否存在。
   - 处理返回的 JSON 结构并反序列化为 `List[RawMessage]`。
@@ -119,15 +169,15 @@ class RunManifest(BaseModel):
 
 ---
 
-## 5. Patchset 聚合算法 (`PatchsetAggregator`)
+## 6. Patchset 聚合算法 (`PatchsetAggregator`)
 
-### 5.1 邮件主题解析
+### 6.1 邮件主题解析
 使用正则表达式提取标题中的 patch 序号元数据：
 - 识别 `[...PATCH... 0/N]` -> Cover Letter (`index=0, total=N`)
-- 识别 `[...PATCH... X/N]` (X >= 1) -> Subpatch (`index=X, total=N`)
+- 识别 `[...PATCH... X/N]` ($X \ge 1$) -> Subpatch (`index=X, total=N`)
 - 识别 `[...PATCH...]`（无分卷号或 `1/1`） -> Standalone Patch (`index=1, total=1`)
 
-### 5.2 补丁集关联机制
+### 6.2 补丁集关联机制
 1. 每个独立的系列（Thread Cluster）通过其唯一代表 Message-ID 标识。
 2. 若邮件为 Cover Letter（0/N），其自身的 `m` 成为该 Cluster 的 Root ID。
 3. 若邮件为分卷补丁（1/N ~ N/N），通过其 `refs` 查找最早引用的 Root ID 并归并。
@@ -137,16 +187,16 @@ class RunManifest(BaseModel):
 
 ---
 
-## 6. 持久化与提示词生成
+## 7. 持久化与提示词生成
 
-### 6.1 会话目录结构 (`SessionManager`)
-每次执行生成独立目录：`data/runs/<timestamp>_<random_id>/`
+### 7.1 会话目录结构 (`SessionManager`)
+每次执行生成独立目录：`data/runs/<timestamp>_<random_id>/`（或 `StorageConfig.data_dir` 指定目录）
 - `manifest.json`：运行元数据（时间、Query、统计数）
 - `raw_metadata.json`：`lei q` 原始 JSON
 - `patchsets.json`：清洗聚合后的 `List[Patchset]`
 - `prompt.md`：AI 提示词文件
 
-### 6.2 提示词模板 (`PromptBuilder`)
+### 7.2 提示词模板 (`PromptBuilder`)
 `prompt.md` 包含：
 1. 资深 Linux 内核专家角色定位与审查目标。
 2. 指向 `patchsets.json` 的绝对路径。
@@ -155,13 +205,14 @@ class RunManifest(BaseModel):
 
 ---
 
-## 7. 验证计划 (Verification Plan)
+## 8. 验证计划 (Verification Plan)
 
-### 7.1 自动化测试 (`pytest`)
-- `test_safety.py`：测试各种合法与非法 query 格式（缺失 d:、超过 3 小时、合规 2 小时、绝对时间等）。
+### 8.1 自动化测试 (`pytest`)
+- `test_config.py`：测试 TOML 配置文件加载、默认值回退与环境覆盖。
+- `test_safety.py`：测试各种合法与非法 query 格式（缺失 d:、超过配置跨度限制、合规时间等）。
 - `test_aggregator.py`：使用真实的 lore 邮件样本测试 Cover Letter、分卷补丁、独立补丁的聚合准确性。
 - `test_storage.py`：测试会话目录创建与 JSON/MD 文件读写。
 - `test_pipeline.py`：使用 Mock 测试端到端 Pipeline 流程。
 
-### 7.2 真实环境端到端验证
+### 8.2 真实环境端到端验证
 - 使用 `uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND d:15.minutes.ago.."` 执行实际抓取，检查 `data/runs/` 下生成的文件内容完整性。
