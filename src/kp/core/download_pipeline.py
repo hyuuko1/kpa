@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-import re
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -46,14 +45,21 @@ class DownloadPipeline:
     def _parse_reviews(self, reviews_content: str) -> List[PatchReview]:
         """解析并校验 AI 评审结果 JSON 字符串"""
         text = reviews_content.strip()
-        # 处理可能包含的 Markdown 代码块包裹 (如 ```json ... ```)
-        if text.startswith("```"):
-            lines = text.splitlines()
-            if lines and lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].startswith("```"):
-                lines = lines[:-1]
-            text = "\n".join(lines).strip()
+        # 处理可能包含的 Markdown 代码块包裹 (如 ```json ... ```)，即使存在前导对话文本
+        if "```" in text:
+            start_idx = text.find("```")
+            end_idx = text.rfind("```")
+            if end_idx > start_idx:
+                inner = text[start_idx + 3 : end_idx].strip()
+            else:
+                inner = text[start_idx + 3 :].strip()
+
+            lines = inner.splitlines()
+            if lines and lines[0].strip().lower() in ("json", "jsonc", "javascript", "js", "text"):
+                inner = "\n".join(lines[1:]).strip()
+            elif lines and not lines[0].strip().startswith(("{", "[")) and len(lines) > 1:
+                inner = "\n".join(lines[1:]).strip()
+            text = inner
 
         try:
             raw_data = json.loads(text)

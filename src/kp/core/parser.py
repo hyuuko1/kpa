@@ -195,10 +195,7 @@ def parse_cover_letter_body_and_diffstat(text: str) -> Tuple[str, Optional[str]]
         elif in_diffstat and not line.strip():
             continue
         else:
-            if not in_diffstat:
-                body_lines.append(line)
-            else:
-                body_lines.append(line)
+            body_lines.append(line)
 
     diffstat = "\n".join(diffstat_lines).strip() if diffstat_lines else None
     body = "\n".join(body_lines).strip()

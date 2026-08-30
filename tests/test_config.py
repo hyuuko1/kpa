@@ -1,6 +1,6 @@
 from pathlib import Path
 import pytest
-from kp.config import load_config, AppConfig, SafetyConfig, LoreConfig, StorageConfig, B4Config
+from kp.config import load_config, AppConfig, B4Config
 
 def test_load_default_config():
     config = load_config(config_path=Path("non_existent_file.toml"))

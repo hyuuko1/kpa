@@ -10,7 +10,6 @@ from kp.adapters.b4 import B4Client, B4ExecutionError
 from kp.config import AppConfig, B4Config, StorageConfig
 from kp.core.download_pipeline import DownloadPipeline, DownloadResult
 from kp.core.parser import MboxParser
-from kp.core.stage3_prompt import Stage3PromptBuilder
 from kp.models import ParsedPatch, ParsedPatchset, Patchset
 from kp.storage.session import SessionManager
 
@@ -359,6 +358,61 @@ def test_download_pipeline_markdown_fences_reviews(mock_env):
     result = pipeline.run(
         run_id=run_id,
         reviews_content=fenced_content,
+        min_score=70,
+    )
+
+    assert result.downloaded_count == 1
+    assert result.parsed_patchsets[0].id == "patch1@example.com"
+
+
+def test_download_pipeline_markdown_fences_with_leading_conversational_text(mock_env):
+    config = mock_env["config"]
+    session_manager = mock_env["session_manager"]
+    run_id = mock_env["run_id"]
+
+    mock_b4 = MagicMock(spec=B4Client)
+    mock_b4.sanitize_id.side_effect = lambda msgid: B4Client.sanitize_id(msgid)
+
+    def fake_fetch_thread(msgid, output_dir, mbox_name="series.mbx"):
+        p = Path(output_dir) / mbox_name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("From xxx\n", encoding="utf-8")
+        return p
+
+    mock_b4.fetch_thread.side_effect = fake_fetch_thread
+
+    mock_parser = MagicMock(spec=MboxParser)
+    mock_parser.parse.return_value = ParsedPatchset(
+        id="patch1@example.com",
+        title="mm patch",
+        total_patches=1,
+    )
+
+    pipeline = DownloadPipeline(
+        config=config,
+        b4_client=mock_b4,
+        session_manager=session_manager,
+        mbox_parser=mock_parser,
+    )
+
+    conversational_content = """Here is the patch review result as requested:
+
+```json
+[
+  {
+    "id": "patch1@example.com",
+    "score": 85,
+    "recommend": true,
+    "reason": "Well tested fix"
+  }
+]
+```
+
+Let me know if you need further analysis!"""
+
+    result = pipeline.run(
+        run_id=run_id,
+        reviews_content=conversational_content,
         min_score=70,
     )
 

@@ -31,7 +31,7 @@ class B4Client:
         if s.startswith("<") and s.endswith(">"):
             s = s[1:-1]
         s = re.sub(r"[^\w.-]+", "_", s)
-        return s.strip("._")
+        return s.strip("._") or "unknown_patchset"
 
     def fetch_thread(
         self,

@@ -21,6 +21,14 @@ def test_sanitize_id_special_chars():
     assert B4Client.sanitize_id("   <spaces-in-id@org>  ") == "spaces-in-id_org"
 
 
+def test_sanitize_id_empty_fallback():
+    assert B4Client.sanitize_id("<>") == "unknown_patchset"
+    assert B4Client.sanitize_id("") == "unknown_patchset"
+    assert B4Client.sanitize_id("   ") == "unknown_patchset"
+    assert B4Client.sanitize_id("..__..") == "unknown_patchset"
+    assert B4Client.sanitize_id("<<<>>>") == "unknown_patchset"
+
+
 @patch("shutil.which")
 def test_b4_not_found(mock_which):
     mock_which.return_value = None
