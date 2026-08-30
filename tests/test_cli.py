@@ -104,3 +104,210 @@ def test_cli_help():
     assert result.exit_code == 0
     assert "Linux Kernel Patch Fetcher & AI Analyzer" in result.output
     assert "fetch" in result.output
+    assert "download" in result.output
+
+
+def test_cli_download_missing_run_id():
+    runner = CliRunner()
+    result = runner.invoke(main, ["download"])
+    assert result.exit_code != 0
+    assert "Missing option" in result.output or "--run-id" in result.output
+
+
+def test_cli_download_missing_targets_and_input():
+    runner = CliRunner()
+    result = runner.invoke(main, ["download", "--run-id", "20260830_120000_abc123"])
+    assert result.exit_code == 1
+    assert "请至少指定 --id 或 --input 参数" in result.output
+
+
+def test_cli_download_by_id_success(tmp_path: Path):
+    from kp.core.download_pipeline import DownloadResult
+
+    runner = CliRunner()
+    fake_result = DownloadResult(
+        run_id="20260830_120000_abc123",
+        run_dir=tmp_path,
+        downloaded_count=2,
+        stage3_prompt_path=tmp_path / "stage3_prompt.md",
+    )
+    with patch("kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result) as mock_run:
+        result = runner.invoke(
+            main,
+            [
+                "download",
+                "--run-id",
+                "20260830_120000_abc123",
+                "--id",
+                "id1@test",
+                "--id",
+                "id2@test",
+                "--min-score",
+                "85",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "下载与结构化解析完成" in result.output
+        assert "运行 ID: 20260830_120000_abc123" in result.output
+        assert "成功下载并解析 Patchset 数: 2" in result.output
+        assert "stage3_prompt.md" in result.output
+        mock_run.assert_called_once_with(
+            run_id="20260830_120000_abc123",
+            target_ids=["id1@test", "id2@test"],
+            reviews_content=None,
+            min_score=85,
+        )
+
+
+def test_cli_download_by_input_file_success(tmp_path: Path):
+    from kp.core.download_pipeline import DownloadResult
+
+    reviews_file = tmp_path / "reviews.json"
+    reviews_content = '[{"id": "msg1@test", "score": 90, "recommend": true, "summary": "good"}]'
+    reviews_file.write_text(reviews_content, encoding="utf-8")
+
+    runner = CliRunner()
+    fake_result = DownloadResult(
+        run_id="20260830_120000_abc123",
+        run_dir=tmp_path,
+        downloaded_count=1,
+        stage3_prompt_path=tmp_path / "stage3_prompt.md",
+    )
+    with patch("kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result) as mock_run:
+        result = runner.invoke(
+            main,
+            [
+                "download",
+                "--run-id",
+                "20260830_120000_abc123",
+                "--input",
+                str(reviews_file),
+            ],
+        )
+        assert result.exit_code == 0
+        assert "下载与结构化解析完成" in result.output
+        mock_run.assert_called_once_with(
+            run_id="20260830_120000_abc123",
+            target_ids=None,
+            reviews_content=reviews_content,
+            min_score=70,
+        )
+
+
+def test_cli_download_by_input_stdin_success(tmp_path: Path):
+    from kp.core.download_pipeline import DownloadResult
+
+    stdin_data = '[{"id": "msg1@test", "score": 95, "recommend": true, "summary": "excellent"}]'
+
+    runner = CliRunner()
+    fake_result = DownloadResult(
+        run_id="20260830_120000_abc123",
+        run_dir=tmp_path,
+        downloaded_count=1,
+        stage3_prompt_path=tmp_path / "stage3_prompt.md",
+    )
+    with patch("kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result) as mock_run:
+        result = runner.invoke(
+            main,
+            [
+                "download",
+                "--run-id",
+                "20260830_120000_abc123",
+                "--input",
+                "-",
+            ],
+            input=stdin_data,
+        )
+        assert result.exit_code == 0
+        assert "下载与结构化解析完成" in result.output
+        mock_run.assert_called_once_with(
+            run_id="20260830_120000_abc123",
+            target_ids=None,
+            reviews_content=stdin_data,
+            min_score=70,
+        )
+
+
+def test_cli_download_input_file_not_found(tmp_path: Path):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "download",
+            "--run-id",
+            "20260830_120000_abc123",
+            "--input",
+            str(tmp_path / "nonexistent.json"),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "评审结果文件不存在" in result.output
+
+
+def test_cli_download_value_error():
+    runner = CliRunner()
+    with patch(
+        "kp.core.download_pipeline.DownloadPipeline.run",
+        side_effect=ValueError("解析 AI 评审结果 JSON 失败: Expecting property name"),
+    ):
+        result = runner.invoke(
+            main,
+            ["download", "--run-id", "20260830_120000_abc123", "--id", "id1@test"],
+        )
+        assert result.exit_code == 1
+        assert "解析 AI 评审结果 JSON 失败" in result.output
+
+
+def test_cli_download_file_not_found_error():
+    runner = CliRunner()
+    with patch(
+        "kp.core.download_pipeline.DownloadPipeline.run",
+        side_effect=FileNotFoundError("patchsets.json not found in /some/path"),
+    ):
+        result = runner.invoke(
+            main,
+            ["download", "--run-id", "20260830_120000_abc123", "--id", "id1@test"],
+        )
+        assert result.exit_code == 1
+        assert "会话或文件不存在" in result.output
+
+
+def test_cli_download_b4_error():
+    from kp.adapters.b4 import B4ExecutionError
+
+    runner = CliRunner()
+    with patch(
+        "kp.core.download_pipeline.DownloadPipeline.run",
+        side_effect=B4ExecutionError("b4 command timed out"),
+    ):
+        result = runner.invoke(
+            main,
+            ["download", "--run-id", "20260830_120000_abc123", "--id", "id1@test"],
+        )
+        assert result.exit_code == 1
+        assert "b4 command timed out" in result.output
+
+
+def test_cli_download_unexpected_error():
+    runner = CliRunner()
+    with patch(
+        "kp.core.download_pipeline.DownloadPipeline.run",
+        side_effect=RuntimeError("unexpected storage crash"),
+    ):
+        result = runner.invoke(
+            main,
+            ["download", "--run-id", "20260830_120000_abc123", "--id", "id1@test"],
+        )
+        assert result.exit_code == 1
+        assert "未知错误: unexpected storage crash" in result.output
+
+
+def test_cli_download_help():
+    runner = CliRunner()
+    result = runner.invoke(main, ["download", "--help"])
+    assert result.exit_code == 0
+    assert "--run-id" in result.output
+    assert "--id" in result.output
+    assert "--input" in result.output
+    assert "--min-score" in result.output
+
