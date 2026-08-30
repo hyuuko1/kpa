@@ -1,0 +1,22 @@
+[project]
+name = "kp"
+version = "0.1.0"
+description = "Linux Kernel Patch Fetcher & AI Analyzer"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1.0",
+    "pydantic>=2.5.0",
+]
+
+[project.scripts]
+kp = "kp.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
