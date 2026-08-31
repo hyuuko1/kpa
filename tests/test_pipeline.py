@@ -30,8 +30,6 @@ def test_fetch_pipeline_run(tmp_path: Path):
         assert (result.run_dir / "patchsets.json").exists()
         assert (result.run_dir / "raw_metadata.json").exists()
         assert (result.run_dir / "manifest.json").exists()
-        assert (result.run_dir / "prompt.md").exists()
-        assert result.prompt_path == result.run_dir / "prompt.md"
 
         # Verify manifest content
         manifest_data = json.loads((result.run_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -52,7 +50,6 @@ def test_fetch_pipeline_empty_query(tmp_path: Path):
         assert result.patchset_count == 0
         assert (result.run_dir / "manifest.json").exists()
         assert (result.run_dir / "patchsets.json").exists()
-        assert (result.run_dir / "prompt.md").exists()
 
 
 def test_fetch_pipeline_multi_patchset(tmp_path: Path):

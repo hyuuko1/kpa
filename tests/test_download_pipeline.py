@@ -149,8 +149,6 @@ def test_download_pipeline_by_reviews(mock_env, tmp_path):
     # 验证持久化文件
     assert (run_dir / "reviews.json").exists()
     assert (run_dir / "filtered_patchsets.json").exists()
-    assert (run_dir / "stage3_prompt.md").exists()
-    assert result.stage3_prompt_path == run_dir / "stage3_prompt.md"
 
     # 检查 filtered_patchsets 内容
     filtered = json.loads((run_dir / "filtered_patchsets.json").read_text(encoding="utf-8"))
@@ -255,7 +253,6 @@ def test_download_pipeline_by_target_ids(mock_env):
     assert result.downloaded_count == 1
     assert len(result.parsed_patchsets) == 1
     assert result.parsed_patchsets[0].id == "patch2@example.com"
-    assert (run_dir / "stage3_prompt.md").exists()
     assert not (run_dir / "reviews.json").exists()
 
 
@@ -500,7 +497,6 @@ def test_download_pipeline_b4_failure_resilient(mock_env):
     # 虽然 patch1 失败，但 patch2 成功，不阻断
     assert result.downloaded_count == 1
     assert result.parsed_patchsets[0].id == "patch2@example.com"
-    assert result.stage3_prompt_path is not None
 
 
 def test_download_pipeline_empty_targets(mock_env):
@@ -520,8 +516,6 @@ def test_download_pipeline_empty_targets(mock_env):
 
     assert result.downloaded_count == 0
     assert result.parsed_patchsets == []
-    assert result.stage3_prompt_path is not None
-    assert result.stage3_prompt_path.exists()
 
 
 def test_download_pipeline_nonexistent_run_dir(tmp_path):

@@ -86,7 +86,7 @@ class SessionManager:
         manifest: RunManifest,
         raw_msgs: List[RawMessage],
         patchsets: List[Patchset],
-        prompt_content: str,
+        prompt_content: str | None = None,
     ) -> None:
         # 1. 保存 manifest.json
         manifest_file = run_dir / "manifest.json"
@@ -106,9 +106,10 @@ class SessionManager:
             json.dumps(patchsets_list, indent=2, ensure_ascii=False), encoding="utf-8"
         )
 
-        # 4. 保存 prompt.md
-        prompt_file = run_dir / "prompt.md"
-        prompt_file.write_text(prompt_content, encoding="utf-8")
+        # 4. 保存 prompt.md (可选)
+        if prompt_content is not None:
+            prompt_file = run_dir / "prompt.md"
+            prompt_file.write_text(prompt_content, encoding="utf-8")
 
     def save_reviews(
         self,

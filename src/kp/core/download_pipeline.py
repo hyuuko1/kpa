@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 from kp.adapters.b4 import B4Client, B4ExecutionError, B4NotFoundError
 from kp.config import AppConfig
 from kp.core.parser import MboxParser
-from kp.core.stage3_prompt import Stage3PromptBuilder
 from kp.models import ParsedPatchset, PatchReview, Patchset
 from kp.storage.session import SessionManager
 
@@ -22,11 +21,13 @@ class DownloadResult(BaseModel):
     run_dir: Path
     downloaded_count: int
     parsed_patchsets: List[ParsedPatchset] = Field(default_factory=list)
-    stage3_prompt_path: Optional[Path] = None
+
+
+DownloadRunResult = DownloadResult
 
 
 class DownloadPipeline:
-    """阶段二核心业务流水线：Reviews过滤 / 指定ID -> B4拉取 -> MboxParser清洗 -> SessionStorage持久化 -> Stage3Prompt生成"""
+    """阶段二核心业务流水线：Reviews过滤 / 指定ID -> B4拉取 -> MboxParser清洗 -> SessionStorage持久化"""
 
     def __init__(
         self,
@@ -34,13 +35,11 @@ class DownloadPipeline:
         b4_client: Optional[B4Client] = None,
         session_manager: Optional[SessionManager] = None,
         mbox_parser: Optional[MboxParser] = None,
-        prompt_builder: Optional[Stage3PromptBuilder] = None,
     ):
         self.config = config
         self.b4_client = b4_client or B4Client(config.b4)
         self.session_manager = session_manager or SessionManager(config.storage)
         self.mbox_parser = mbox_parser or MboxParser()
-        self.prompt_builder = prompt_builder or Stage3PromptBuilder()
 
     def _parse_reviews(self, reviews_content: str) -> List[PatchReview]:
         """解析并校验 AI 评审结果 JSON 字符串"""
@@ -89,7 +88,7 @@ class DownloadPipeline:
         target_ids: Optional[List[str]] = None,
         reviews_content: Optional[str] = None,
         min_score: int = 70,
-    ) -> DownloadResult:
+    ) -> DownloadRunResult:
         """执行下载与结构化清洗流水线
 
         Args:
@@ -99,7 +98,7 @@ class DownloadPipeline:
             min_score: 最低推荐分数阈值 (默认 70)
 
         Returns:
-            DownloadResult: 包含下载统计、解析后补丁集列表与阶段三提示词路径的结果对象
+            DownloadRunResult: 包含下载统计与解析后补丁集列表的结果对象
         """
         run_dir = self.session_manager.get_run_dir(run_id)
         existing_patchsets = self.session_manager.load_patchsets(run_dir)
@@ -152,7 +151,6 @@ class DownloadPipeline:
 
         # 3. 逐个调用 b4 下载并解析 mbox
         parsed_patchsets: List[ParsedPatchset] = []
-        parsed_paths: List[Path] = []
 
         for ps in target_patchsets:
             patchset_id = ps.id
@@ -174,22 +172,16 @@ class DownloadPipeline:
                 patchset_id=patchset_id,
                 title=ps.title,
             )
-            saved_file = self.session_manager.save_parsed_patchset(
+            self.session_manager.save_parsed_patchset(
                 run_dir,
                 sanitized_id,
                 parsed_ps,
             )
-            parsed_paths.append(saved_file)
             parsed_patchsets.append(parsed_ps)
 
-        # 4. 生成阶段三提示词并持久化
-        prompt_content = self.prompt_builder.build_prompt(run_id, parsed_paths)
-        stage3_prompt_path = self.session_manager.save_stage3_prompt(run_dir, prompt_content)
-
-        return DownloadResult(
+        return DownloadRunResult(
             run_id=run_id,
             run_dir=run_dir,
             downloaded_count=len(parsed_patchsets),
             parsed_patchsets=parsed_patchsets,
-            stage3_prompt_path=stage3_prompt_path,
         )
