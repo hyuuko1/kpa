@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import re
 import pytest
+import kp.config
 from kp.config import StorageConfig
 from kp.storage.session import SessionManager
 from kp.models import (
@@ -291,6 +292,6 @@ def test_session_manager_get_downloaded_patchset_dirs(tmp_path: Path):
 
 
 def test_storage_test_environment_no_repo_pollution():
-    """验证单元测试环境不会在仓库根目录下生成 data/runs 目录"""
-    repo_data_runs = Path("data/runs")
-    assert not repo_data_runs.exists() or len(list(repo_data_runs.iterdir())) == 0
+    """验证单元测试环境自动重定向存储目录至 /tmp，避免测试执行污染仓库 data/runs"""
+    cfg = kp.config.load_config()
+    assert "/tmp/kp_pytest_runs" in cfg.storage.data_dir

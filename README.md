@@ -104,7 +104,7 @@ cat reviews.json | uv run kp download --run-id 20260830_141211_4d77bf --input -
 
 ### 4. 阶段三：AI 深度技术剖析与报告生成 (`kp analyze`)
 
-阶段三支持通过外部 AI Agent 自动化分析，或在 AI Agent 环境下结合 Skill 直接分析：
+阶段三通过 `kp analyze` 自动化调度 AI Agent（agy / opencode）结合本地 Linux 内核源码树开展深度分析：
 
 ```bash
 # 4.1 预检（Dry Run）：检查待分析补丁集直读文件完整性，不触发 Agent
@@ -136,12 +136,12 @@ uv run kp analyze --run-id 20260830_141211_4d77bf --force
 `kp` 自带项目级 Skill：[`.agents/skills/kernel-patch-analyzer/`](.agents/skills/kernel-patch-analyzer/)，可被 Google Antigravity、OpenCode 等 AI Agent 识别与加载：
 
 1. **初筛打分阶段 (Screening)**：
-   - Agent 查阅 [`references/screening.md`](.agents/skills/kernel-patch-analyzer/references/screening.md)；
+   - 当前对话 Agent 查阅 [`references/screening.md`](.agents/skills/kernel-patch-analyzer/references/screening.md)；
    - 对 `data/runs/<run_id>/patchsets.json` 各补丁集按 4 大维度（子系统重要性、改动规模、代码成熟度、维护者关注度）进行 0-100 分量化打分并生成 `reviews.json`。
 2. **深度分析阶段 (Deep Technical Analysis)**：
-   - Agent 查阅 [`references/deep-analysis.md`](.agents/skills/kernel-patch-analyzer/references/deep-analysis.md)；
-   - 直接阅读 `data/runs/<run_id>/patchsets/<sanitized_id>/` 下的直读文件（`00-cover-letter.md`、`discussions.md`、`patches/*.patch`）；
-   - 从 **5 大分析维度**（背景动机与架构设计、锁与并发安全、内存与资源生命周期、潜在回归与性能/兼容性风险、社区审阅洞察与争议点）撰写详细分析报告并写入 `data/runs/<run_id>/reports/<sanitized_id>.md`。
+   - 调度命令：运行 `uv run kp analyze --run-id <run_id>`；
+   - 由 `kp analyze` 调度外部 Agent 子进程，查阅 [`references/deep-analysis.md`](.agents/skills/kernel-patch-analyzer/references/deep-analysis.md)；
+   - 结合补丁集直读文件（`00-cover-letter.md`、`discussions.md`、`patches/*.patch`）与本地 Linux 内核源码树，从 **5 大分析维度**（背景动机与架构设计、锁与并发安全、内存与资源生命周期、潜在回归与性能/兼容性风险、社区审阅洞察与争议点）撰写深度分析报告并写入 `data/runs/<run_id>/reports/<sanitized_id>.md`。
 
 ---
 

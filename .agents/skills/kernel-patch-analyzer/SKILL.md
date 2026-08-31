@@ -30,7 +30,7 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 2. **抓取**：运行 `uv run kp fetch -q "<query>"`，获取 `run_id`；
 3. **初筛打分**：读取 `data/runs/<run_id>/patchsets.json`，根据 [初筛指南](references/screening.md) 评估打分，将结果写入 `data/runs/<run_id>/reviews.json`；
 4. **下载拆解**：运行 `uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json`；
-5. **深度分析**：运行 `uv run kp analyze --run-id <run_id>`（或直接逐个阅读直读文件），依据 [深度分析指南](references/deep-analysis.md) 完成 5 大维度分析并将报告保存至 `data/runs/<run_id>/reports/<sanitized_id>.md`。
+5. **深度分析**：运行 `uv run kp analyze --run-id <run_id>`，由 `kp analyze` 自动调度外部 Agent 结合 Linux 内核源码树完成 5 大维度深度分析并落盘至 `data/runs/<run_id>/reports/<sanitized_id>.md`。
 
 ### 路径 B：从初筛打分起步 (From Screening)
 - **前置条件**：用户提供了已存在的 `run_id`，或目录下已有 `data/runs/<run_id>/patchsets.json`。
@@ -50,8 +50,10 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 ### 路径 D：从深度技术分析起步 (From Deep Analysis)
 - **前置条件**：补丁集已完成下载并存在直读目录 `data/runs/<run_id>/patchsets/<sanitized_id>/`。
 - **执行动作**：
-  - **方式一（CLI 自动调度）**：运行 `uv run kp analyze --run-id <run_id>`；
-  - **方式二（Agent 直接分析）**：直接使用文件查看工具阅读该目录下的 `00-cover-letter.md`、`discussions.md`、`patches/*.patch` 及 `meta.json`，遵循 [深度分析指南](references/deep-analysis.md) 中的 5 大维度展开技术分析，并将报告保存至 `data/runs/<run_id>/reports/<sanitized_id>.md`。
+  - 运行 `uv run kp analyze --run-id <run_id>`；
+  - 若仅需分析指定补丁集，运行 `uv run kp analyze --run-id <run_id> --id "<msgid>"`；
+  - `kp analyze` 会自动执行前置内核代码路径与完整性校验、跳过已分析补丁集（防重复分析），并通过子进程调度 Agent 完成 5 大维度深度分析与独立报告落盘。
+  - ⚠️ **规范要求**：当前对话中的 Agent 严禁自行直接读取直读文件撰写报告，必须统一通过 `uv run kp analyze` 命令调度完成，以确保内核源码树上下文注入、多进程并发控制与防重机制生效。
 
 ### 路径 E：靶向单个补丁集分析 (Single Patchset Target)
 - **执行动作**：
@@ -157,6 +159,6 @@ data/runs/<run_id>/
 根据当前所处阶段，查阅对应的细分准则文档：
 
 - **阶段一初筛打分与 `reviews.json` 生成规范**：请查阅 [初筛指南 (references/screening.md)](references/screening.md)
-  - 涵盖核心子系统权重、变更性质、RFC 价值评估标准与 JSON Schema。
+  - 涵盖核心子系统权重、变更性质、RFC 价值评估标准与 JSON Schema（由当前对话中的 Agent 在初筛阶段直接执行并生成 `reviews.json`）。
 - **阶段三深度技术分析 5 大核心维度与报告模板**：请查阅 [深度分析指南 (references/deep-analysis.md)](references/deep-analysis.md)
-  - 涵盖：① 背景动机与架构设计、② 锁与并发安全、③ 内存与资源生命周期、④ 潜在回归与性能/兼容性风险、⑤ 社区审阅洞察与争议点，以及标准 Markdown 报告模板。
+  - 涵盖：① 背景动机与架构设计、② 锁与并发安全、③ 内存与资源生命周期、④ 潜在回归与性能/兼容性风险、⑤ 社区审阅洞察与争议点，以及标准 Markdown 报告模板（作为 `kp analyze` 外部 Agent 分析子进程遵循的规范与 Prompt 指引）。
