@@ -67,30 +67,39 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 
 ### 2.1 自然语言转 `lei q` 查询规则 (`kp fetch`)
 
-`kp fetch` 底层调用 `lei q`。构建查询语句时必须遵循以下规则：
+`kp fetch` 底层调用 `lei q`。构建查询语句时必须遵循以下规则与最佳实践：
 
 1. **强制安全时间跨度限制**：查询条件中**必须**包含 `d:` 时间过滤。
    - 相对时间：`d:2.hours.ago..`、`d:24.hours.ago..`、`d:48.hours.ago..`、`d:1.day.ago..`
    - 绝对时间：`d:2026-08-31T08:00..2026-08-31T10:00`
 2. **过滤回复邮件**：建议始终加上 `NOT s:Re`，避免拉取重复的单封回复邮件。
-3. **常见内核子系统邮件列表 (List Identifier)**：
-   - 内存管理 (MM)：`l:linux-mm.kvack.org`
-   - 调度器 / 锁 / RCU / 核心内核：`l:linux-kernel@vger.kernel.org`
-   - 文件系统 (VFS/FS)：`l:linux-fsdevel@vger.kernel.org`
-   - 块设备与 IO：`l:linux-block@vger.kernel.org` 或 `l:io-uring@vger.kernel.org`
-   - 网络子系统：`l:netdev@vger.kernel.org`
-   - BPF / eBPF：`l:bpf@vger.kernel.org`
-   - 架构特定：`l:linux-arm-kernel@lists.infradead.org`、`l:linux-riscv@lists.infradead.org`
-   - 虚拟化：`l:kvm@vger.kernel.org`
+3. **子系统过滤两大核心范式 (List vs. Diff Path)**：
+   - **范式 A：独立邮件列表 (`l:`)** —— 适用于有**独立专用邮件列表**的子系统：
+     - 内存管理 (MM)：`l:linux-mm.kvack.org`
+     - 网络子系统 (Netdev)：`l:netdev@vger.kernel.org`
+     - BPF / eBPF：`l:bpf@vger.kernel.org`
+     - 文件系统 (VFS/FS)：`l:linux-fsdevel@vger.kernel.org`
+     - 块设备与 IO：`l:linux-block@vger.kernel.org` 或 `l:io-uring@vger.kernel.org`
+     - 架构特定：`l:linux-arm-kernel@lists.infradead.org`、`l:linux-riscv@lists.infradead.org`
+     - 虚拟化：`l:kvm@vger.kernel.org`
+   - **范式 B：Diff 变更路径 (`dfn:`)** —— 适用于**寄宿在 LKML 无独立列表的核心子系统**（调度器、锁、RCU 等）或针对具体源码目录/头文件的精准捕获：
+     - **调度子系统 (Scheduler)**：`dfn:kernel/sched` 或 `(dfn:kernel/sched OR dfn:include/linux/sched)`
+     - **核心锁与同步机制 (Locking)**：`dfn:kernel/locking` 或 `(dfn:kernel/locking OR dfn:include/linux/lockdep)`
+     - **RCU 子系统**：`dfn:kernel/rcu` 或 `(dfn:kernel/rcu OR dfn:include/linux/rcu)`
+     - *为什么核心子系统必须用 `dfn:` 而非 `s:`？*
+       - `s:sched` 或 `s:lock` 存在严重噪音（误伤 `net/sched` 流量控制、`drm/sched`、`clock`、外设驱动私有锁），且会遗漏标题未带关键词的核心修改（如跨子系统的 cgroup/rseq/topology 补丁）；
+       - `dfn:` 精准命中内核源码变更路径。结合 `kp` 默认的 `lei q -t`（线程级展开）与并查集聚合，只要系列中有任意补丁命中目标路径，即可完整拉取包括 Cover Letter 与社区审阅在内的整套补丁集。
 
 #### 自然语言映射示例表
 | 用户自然语言意图 | 推荐的 `kp fetch` 命令 |
 |---|---|
 | “分析过去两小时内存管理子系统的改动” | `uv run kp fetch -q "l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago.."` |
 | “查看最近1小时网络子系统 netdev 补丁” | `uv run kp fetch -q "l:netdev@vger.kernel.org AND NOT s:Re AND d:1.hours.ago.."` |
-| “检索过去2小时内包含 bcachefs 的补丁” | `uv run kp fetch -q "s:bcachefs AND NOT s:Re AND d:2.hours.ago.."` |
+| “检索过去2小时内调度子系统 (Scheduler) 的补丁” | `uv run kp fetch -q "(dfn:kernel/sched OR dfn:include/linux/sched) AND NOT s:Re AND d:2.hours.ago.."` |
+| “抓取过去2小时内核锁与同步机制 (Locking) 补丁” | `uv run kp fetch -q "(dfn:kernel/locking OR dfn:include/linux/lockdep) AND NOT s:Re AND d:2.hours.ago.."` |
+| “查看过去2小时 RCU 子系统的补丁集” | `uv run kp fetch -q "(dfn:kernel/rcu OR dfn:include/linux/rcu) AND NOT s:Re AND d:2.hours.ago.."` |
 | “抓取过去90分钟 BPF 的补丁集” | `uv run kp fetch -q "l:bpf@vger.kernel.org AND NOT s:Re AND d:90.minutes.ago.."` |
-| “查看 LKML 上过去2小时与 RCU 或 lock 相关的补丁” | `uv run kp fetch -q "(s:rcu OR s:lock OR s:spinlock) AND NOT s:Re AND d:2.hours.ago.."` |
+| “分析过去2小时文件系统 (VFS/FS) 补丁” | `uv run kp fetch -q "l:linux-fsdevel@vger.kernel.org AND NOT s:Re AND d:2.hours.ago.."` |
 
 ---
 
