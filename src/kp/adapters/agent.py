@@ -65,10 +65,16 @@ class AgyAgentRunner(BaseAgentRunner):
             )
 
         if kernel_path:
-            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，Linux 内核代码路径：{kernel_path}"
+            prompt = (
+                f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，"
+                f"Linux 内核代码路径：{kernel_path}，请将生成的深度分析报告写入文件：{report_output_path.resolve()}"
+            )
         else:
-            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
-        args = [self.cmd, "-p", prompt]
+            prompt = (
+                f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，"
+                f"请将生成的深度分析报告写入文件：{report_output_path.resolve()}"
+            )
+        args = [self.cmd, "--dangerously-skip-permissions", "-p", prompt]
 
         try:
             res = subprocess.run(
@@ -113,10 +119,16 @@ class OpenCodeAgentRunner(BaseAgentRunner):
             )
 
         if kernel_path:
-            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，Linux 内核代码路径：{kernel_path}"
+            prompt = (
+                f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，"
+                f"Linux 内核代码路径：{kernel_path}，请将生成的深度分析报告写入文件：{report_output_path.resolve()}"
+            )
         else:
-            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
-        args = [self.cmd, "run", prompt]
+            prompt = (
+                f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，"
+                f"请将生成的深度分析报告写入文件：{report_output_path.resolve()}"
+            )
+        args = [self.cmd, "run", "--auto", prompt]
 
         try:
             res = subprocess.run(

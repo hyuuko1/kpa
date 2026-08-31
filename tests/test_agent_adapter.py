@@ -88,9 +88,11 @@ def test_agy_runner_successful_execution(mock_run, mock_which, tmp_path):
     mock_run.assert_called_once()
     args, kwargs = mock_run.call_args
     assert args[0][0] == "agy"
-    assert args[0][1] == "-p"
-    assert "kernel-patch-analyzer" in args[0][2]
-    assert str(patchset_dir.resolve()) in args[0][2]
+    assert args[0][1] == "--dangerously-skip-permissions"
+    assert args[0][2] == "-p"
+    assert "kernel-patch-analyzer" in args[0][3]
+    assert str(patchset_dir.resolve()) in args[0][3]
+    assert str(report_file.resolve()) in args[0][3]
     assert kwargs.get("timeout") == 120
     assert kwargs.get("capture_output") is True
     assert kwargs.get("text") is True
@@ -113,7 +115,7 @@ def test_agy_runner_custom_skill(mock_run, mock_which, tmp_path):
     runner.run_analysis(patchset_dir, report_file, skill_name="custom-skill")
 
     args, _ = mock_run.call_args
-    assert "custom-skill" in args[0][2]
+    assert "custom-skill" in args[0][3]
 
 
 @patch("shutil.which", return_value="/usr/bin/agy")
@@ -133,7 +135,7 @@ def test_agy_runner_with_kernel_path(mock_run, mock_which, tmp_path):
     runner.run_analysis(patchset_dir, report_file, kernel_path="/code/linux")
 
     args, _ = mock_run.call_args
-    assert "Linux 内核代码路径：/code/linux" in args[0][2]
+    assert "Linux 内核代码路径：/code/linux" in args[0][3]
 
 
 @patch("shutil.which", return_value="/usr/bin/agy")
@@ -232,8 +234,10 @@ def test_opencode_runner_successful_execution(mock_run, mock_which, tmp_path):
     args, kwargs = mock_run.call_args
     assert args[0][0] == "opencode"
     assert args[0][1] == "run"
-    assert "kernel-patch-analyzer" in args[0][2]
-    assert str(patchset_dir.resolve()) in args[0][2]
+    assert args[0][2] == "--auto"
+    assert "kernel-patch-analyzer" in args[0][3]
+    assert str(patchset_dir.resolve()) in args[0][3]
+    assert str(report_file.resolve()) in args[0][3]
     assert kwargs.get("timeout") == 180
 
 
@@ -254,7 +258,7 @@ def test_opencode_runner_with_kernel_path(mock_run, mock_which, tmp_path):
     runner.run_analysis(patchset_dir, report_file, kernel_path="/code/linux")
 
     args, _ = mock_run.call_args
-    assert "Linux 内核代码路径：/code/linux" in args[0][2]
+    assert "Linux 内核代码路径：/code/linux" in args[0][3]
 
 
 @patch("shutil.which", return_value="/usr/bin/opencode")

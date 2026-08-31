@@ -80,7 +80,7 @@
    - 保存全量 `parsed_series.json`。
 
 ### 阶段三：AI Agent 深度内核分析与独立报告生成 (Analyze & Report)
-1. **输入**：`kp analyze --run-id <ID> [--id <MSG_ID>] [--agent agy|opencode] [--force] [--dry-run]`。
+1. **输入**：`kp analyze --run-id <ID> [--id <MSG_ID>] [--agent agy|opencode] [--concurrency N] [--force] [--dry-run]`（并发度建议 <= 3）。
 2. **前置防重、内核路径与完整性校验**：
    - 校验 Linux 内核源码树路径配置（`kernel.path`，默认 `/code/linux`），若未配置或为空则抛出错误并拦截，严禁调用 Agent；
    - 检查 `data/runs/<run_id>/reports/<sanitized_id>.md` 是否已存在且非空。若已存在且未指定 `--force`，自动跳过该补丁集以避免重复消耗算力；
