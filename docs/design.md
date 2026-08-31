@@ -27,14 +27,15 @@
 ┌──────────────────────────────────────────────────────────┐
 │                      CLI 表示层                          │
 │               src/kp/cli.py (Click)                      │
-│             `kp fetch`  /  `kp download`                 │
+│        `kp fetch`  /  `kp download`  /  `kp analyze`     │
 └────────────────────────────┬─────────────────────────────┘
                              │
 ┌────────────────────────────▼─────────────────────────────┐
 │                    应用流水线编排层                      │
 │                src/kp/core/pipeline.py                   │
 │            src/kp/core/download_pipeline.py              │
-│       FetchPipeline       /      DownloadPipeline        │
+│            src/kp/core/analyze_pipeline.py               │
+│    FetchPipeline  /  DownloadPipeline  / AnalyzePipeline │
 └──────┬─────────────────────┬─────────────────────┬───────┘
        │                     │                     │
 ┌──────▼─────┐ ┌─────────────▼─────────────┐ ┌─────▼───────┐
@@ -42,15 +43,18 @@
 │src/kp/     │ │src/kp/core/               │ │src/kp/     │
 │config.py   │ │- aggregator.py (线程聚合) │ │adapters/   │
 │config.toml │ │- parser.py (Mbox解析清洗) │ │- lore.py   │
-│            │ │- formatters.py (直读格式化│ │- b4.py     │
-│            │ │- prompt.py (阶段一提示词) │ │            │
-│            │ │- stage3_prompt.py (阶段三)│ │            │
-└────────────┘ └─────────────┬─────────────┘ └─────────────┘
-                             │
-┌────────────────────────────▼─────────────────────────────┐
-│                       存储持久化层                       │
-│                 src/kp/storage/session.py                │
-│                 data/runs/<run_id>/...                   │
+│            │ │- formatters.py (直读生成) │ │- b4.py     │
+│            │ └───────────────────────────┘ │- agent.py  │
+│            │                               │ (agy, etc.)│
+└────────────┘                               └─────┬───────┘
+                                                   │
+┌──────────────────────────────────────────────────▼───────┐
+│                  项目级 Skill (渐进式披露)               │
+│          .agents/skills/kernel-patch-analyzer/           │
+│          ├── SKILL.md                                    │
+│          └── references/                                 │
+│              ├── screening.md                            │
+│              └── deep-analysis.md                        │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -63,7 +67,8 @@
 2. **安全校验**：`SafetyValidator` 校验查询跨度 <= 180 分钟。
 3. **抓取**：`LoreClient` 执行 `lei q -t -f json` 拉取原始邮件元数据。
 4. **聚合**：`PatchsetAggregator` 通过并查集（Union-Find）聚合邮件线程，提取代表性 Message-ID 与补丁清单。
-5. **持久化**：`SessionManager` 保存 `manifest.json`、`raw_metadata.json`、`patchsets.json` 与 `prompt.md`。
+5. **持久化**：`SessionManager` 保存 `manifest.json`、`raw_metadata.json` 与 `patchsets.json`。
+6. **AI 初筛引导**：外部 AI Agent 加载 `kernel-patch-analyzer` skill (引用 `references/screening.md`) 进行初筛并生成 `reviews.json`。
 
 ### 阶段二：AI 评审打分接入、完整拉取与直读拆解 (Download & Parse)
 1. **输入**：`kp download --run-id <ID> [--input reviews.json | --id <MSG_ID>]`。
@@ -73,12 +78,13 @@
    - `MboxParser` 提取 Cover Letter、Patches (commit message, trailers, diff) 与递归回复评论树 (`ParsedComment`)。
    - `formatters` 生成直读文件：`00-cover-letter.md`、`discussions.md`、`patches/0001-xxx.patch` 及轻量索引 `meta.json`。
    - 保存全量 `parsed_series.json`。
-5. **阶段三准备**：生成 `stage3_prompt.md`，直接引用各补丁集的直读 Markdown 与 Patch 路径。
 
-### 阶段三：内核深度代码分析与报告 (Deep Analysis - 规划中)
-1. **输入**：AI Agent 直接消费 `00-cover-letter.md`、`discussions.md` 和 `patches/`。
-2. **分析维度**：背景架构演进、锁与并发安全、内存与生命周期、潜在回归与兼容性风险、社区争议点。
-3. **输出**：生成结构化技术评审报告与推送。
+### 阶段三：AI Agent 深度内核分析与独立报告生成 (Analyze & Report)
+1. **输入**：`kp analyze --run-id <ID> [--id <MSG_ID>] [--agent agy|opencode]`。
+2. **前置校验**：`AnalyzePipeline` 自动校验目标补丁集直读文件完整性。
+3. **Agent 驱动**：`AgentRunner`（如 `AgyAgentRunner` / `OpenCodeAgentRunner`）以极简指令触发外部 Agent 加载 `kernel-patch-analyzer` skill (引用 `references/deep-analysis.md`)。
+4. **5 大分析维度**：背景动机与架构设计、锁与并发安全、内存与资源生命周期、潜在回归与性能/兼容性风险、社区审阅洞察与争议点。
+5. **持久化**：每个补丁集独立生成并校验 Markdown 报告，保存在 `data/runs/<run_id>/reports/<sanitized_id>.md`。
 
 ---
 
@@ -91,20 +97,21 @@ data/runs/<run_id>/
 ├── manifest.json              # 会话清单元数据 (RunManifest)
 ├── raw_metadata.json          # [阶段一] lei 返回的原始邮件元数据
 ├── patchsets.json             # [阶段一] 聚合后的 Patchset 列表
-├── prompt.md                  # [阶段一] AI 筛选提示词
 ├── reviews.json               # [阶段二] 导入的 AI 打分与推荐结果
 ├── filtered_patchsets.json    # [阶段二] 经筛选后待下载的 Patchset 列表
-├── stage3_prompt.md           # [阶段二] 阶段三深度技术分析提示词
-└── patchsets/                 # [阶段二] 补丁集下载与拆解目录
-    └── <sanitized_msgid>/     # 路径安全的 MsgID 目录
-        ├── 00-cover-letter.md # [直读] Cover Letter 系列说明与总体 Diffstat
-        ├── discussions.md     # [直读] 社区审阅讨论与争论树（Markdown 引用排版）
-        ├── patches/           # [直读] 独立拆解的标准 Git Patch 文件
-        │   ├── 0001-xxx.patch # 包含 Commit Message、Trailers 与统一 Diff
-        │   └── 0002-xxx.patch
-        ├── meta.json          # 轻量级索引元数据（无庞大 Diff）
-        ├── parsed_series.json # 全量结构化 JSON 数据（向下兼容）
-        └── series.mbx         # b4 下载的原始线程 mbox
+├── patchsets/                 # [阶段二] 补丁集下载与拆解目录
+│   └── <sanitized_msgid>/     # 路径安全的 MsgID 目录
+│       ├── 00-cover-letter.md # [直读] Cover Letter 系列说明与总体 Diffstat
+│       ├── discussions.md     # [直读] 社区审阅讨论与争论树（Markdown 引用排版）
+│       ├── patches/           # [直读] 独立拆解的标准 Git Patch 文件
+│       │   ├── 0001-xxx.patch # 包含 Commit Message、Trailers 与统一 Diff
+│       │   └── 0002-xxx.patch
+│       ├── meta.json          # 轻量级索引元数据（无庞大 Diff）
+│       ├── parsed_series.json # 全量结构化 JSON 数据（向下兼容）
+│       └── series.mbx         # b4 下载的原始线程 mbox
+└── reports/                   # [阶段三] 独立深度技术分析报告目录
+    ├── <sanitized_msgid_1>.md # 各补丁集深度分析报告
+    └── <sanitized_msgid_2>.md
 ```
 
 ---
@@ -113,19 +120,20 @@ data/runs/<run_id>/
 
 | 模块路径 | 核心类 / 函数 | 职责说明 |
 |---|---|---|
-| `src/kp/config.py` | `AppConfig`, `SafetyConfig`, `LoreConfig`, `B4Config`, `StorageConfig` | TOML 配置解析、默认值回退与环境变量管理 |
-| `src/kp/models.py` | `RawMessage`, `Patchset`, `PatchReview`, `ParsedComment`, `ParsedPatch`, `ParsedCoverLetter`, `ParsedPatchset`, `RunManifest` | 全局强类型 Pydantic 数据模型 |
+| `src/kp/config.py` | `AppConfig`, `SafetyConfig`, `LoreConfig`, `B4Config`, `StorageConfig`, `AgentConfig` | TOML 配置解析、默认值回退与环境变量管理 |
+| `src/kp/models.py` | `RawMessage`, `Patchset`, `PatchReview`, `ParsedComment`, `ParsedPatch`, `ParsedCoverLetter`, `ParsedPatchset`, `PatchsetAnalysis`, `AnalyzeRunResult`, `RunManifest` | 全局强类型 Pydantic 数据模型 |
 | `src/kp/adapters/lore.py` | `LoreClient`, `SafetyValidator` | `lei q` 外部调用与时间跨度（<=3h）强制安全拦截 |
 | `src/kp/adapters/b4.py` | `B4Client` | `b4 mbox` 外部调用、超时控制与 MsgID 安全转义 |
+| `src/kp/adapters/agent.py` | `BaseAgentRunner`, `AgyAgentRunner`, `OpenCodeAgentRunner`, `get_agent_runner` | 外部 AI Agent (agy / opencode) 子进程调用与产物后置校验 |
 | `src/kp/core/aggregator.py` | `PatchsetAggregator` | 邮件主题正则解析、并查集线程聚合与代表 ID 提取 |
 | `src/kp/core/parser.py` | `MboxParser` | Mbox 邮件解析、Git Trailers 提取、评论树环路检测与树形还原 |
 | `src/kp/core/formatters.py` | `render_cover_letter_md`, `render_discussions_md`, `render_patch_file`, `render_meta_json` | AI 直读友好型 Markdown 与 Patch 文件生成 |
-| `src/kp/core/prompt.py` | `PromptBuilder` | 阶段一 AI 筛选提示词生成 |
-| `src/kp/core/stage3_prompt.py`| `Stage3PromptBuilder` | 阶段三 AI 深度技术分析提示词生成 |
 | `src/kp/core/pipeline.py` | `FetchPipeline` | 阶段一业务流水线编排 |
 | `src/kp/core/download_pipeline.py`| `DownloadPipeline` | 阶段二业务流水线编排 |
-| `src/kp/storage/session.py` | `SessionManager` | 会话目录管理与各类数据/Markdown/Patch 文件持久化 |
-| `src/kp/cli.py` | `main`, `fetch_cmd`, `download_cmd` | Click CLI 用户命令行接口 |
+| `src/kp/core/analyze_pipeline.py` | `AnalyzePipeline` | 阶段三业务流水线编排 |
+| `src/kp/storage/session.py` | `SessionManager` | 会话目录管理与各类数据/Markdown/Patch/Report 文件持久化 |
+| `src/kp/cli.py` | `main`, `fetch_cmd`, `download_cmd`, `analyze_cmd` | Click CLI 用户命令行接口 |
+| `.agents/skills/kernel-patch-analyzer/` | `SKILL.md`, `references/` | 统一项目级 Skill (渐进式披露引导全流程) |
 
 ---
 
@@ -135,3 +143,4 @@ data/runs/<run_id>/
 2. **文档自主维护要求**：
    - 任何涉及接口签名、数据模型、存储目录结构、业务流程的修改，必须在完成代码修改与测试后，**立即自主更新本文档（`docs/design.md`）**。
    - 严禁出现代码与设计文档脱节的情况。
+
