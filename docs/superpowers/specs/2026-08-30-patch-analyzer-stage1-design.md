@@ -135,7 +135,7 @@ class Patchset(BaseModel):
 
 class RunManifest(BaseModel):
     """运行会话摘要清单"""
-    run_id: str                                             # 会话 ID (如 20260830_175000_3a8f1b)
+    run_id: str                                             # 会话 ID (如 20260830_175000)
     timestamp: str                                          # 执行时间戳 (ISO)
     query: str                                              # 执行的查询语句
     total_raw_messages: int                                 # 原始消息数
@@ -192,7 +192,7 @@ class RunManifest(BaseModel):
 ## 7. 持久化与提示词生成
 
 ### 7.1 会话目录结构 (`SessionManager`)
-每次执行生成独立目录：`data/runs/<timestamp>_<random_id>/`（或 `StorageConfig.data_dir` 指定目录）
+每次执行生成独立目录：`data/runs/<timestamp>/`（或 `StorageConfig.data_dir` 指定目录）
 - `manifest.json`：运行元数据（时间、Query、统计数）
 - `raw_metadata.json`：`lei q` 原始 JSON
 - `patchsets.json`：清洗聚合后的 `List[Patchset]`

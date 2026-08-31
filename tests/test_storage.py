@@ -25,7 +25,7 @@ def test_session_manager_create_session_dir(tmp_path: Path):
     assert run_dir.exists()
     assert run_dir.is_dir()
     assert run_dir.parent == tmp_path
-    assert re.match(r"^\d{8}_\d{6}_[0-9a-f]{6}$", run_id)
+    assert re.match(r"^\d{8}_\d{6}$", run_id)
     assert run_dir.name == run_id
 
 
@@ -97,8 +97,8 @@ def test_session_manager_save_and_structure(tmp_path: Path):
 def test_session_manager_get_run_dir(tmp_path: Path):
     config = StorageConfig(data_dir=str(tmp_path))
     mgr = SessionManager(config)
-    run_dir = mgr.get_run_dir("20260830_120000_123456")
-    assert run_dir == tmp_path / "20260830_120000_123456"
+    run_dir = mgr.get_run_dir("20260830_120000")
+    assert run_dir == tmp_path / "20260830_120000"
 
 
 def test_session_manager_load_patchsets(tmp_path: Path):

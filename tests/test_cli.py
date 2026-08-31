@@ -133,7 +133,7 @@ def test_cli_download_missing_run_id():
 
 def test_cli_download_missing_targets_and_input():
     runner = CliRunner()
-    result = runner.invoke(main, ["download", "--run-id", "20260830_120000_abc123"])
+    result = runner.invoke(main, ["download", "--run-id", "20260830_120000"])
     assert result.exit_code == 1
     assert "请至少指定 --id 或 --input 参数" in result.output
 
@@ -143,7 +143,7 @@ def test_cli_download_by_id_success(tmp_path: Path):
 
     runner = CliRunner()
     fake_result = DownloadResult(
-        run_id="20260830_120000_abc123",
+        run_id="20260830_120000",
         run_dir=tmp_path,
         downloaded_count=2,
     )
@@ -155,7 +155,7 @@ def test_cli_download_by_id_success(tmp_path: Path):
             [
                 "download",
                 "--run-id",
-                "20260830_120000_abc123",
+                "20260830_120000",
                 "--id",
                 "id1@test",
                 "--id",
@@ -166,11 +166,11 @@ def test_cli_download_by_id_success(tmp_path: Path):
         )
         assert result.exit_code == 0
         assert "下载与结构化解析完成" in result.output
-        assert "运行 ID: 20260830_120000_abc123" in result.output
+        assert "运行 ID: 20260830_120000" in result.output
         assert "成功下载并解析 Patchset 数: 2" in result.output
         assert "kp analyze --run-id" in result.output
         mock_run.assert_called_once_with(
-            run_id="20260830_120000_abc123",
+            run_id="20260830_120000",
             target_ids=["id1@test", "id2@test"],
             reviews_content=None,
             min_score=85,
@@ -188,7 +188,7 @@ def test_cli_download_by_input_file_success(tmp_path: Path):
 
     runner = CliRunner()
     fake_result = DownloadResult(
-        run_id="20260830_120000_abc123",
+        run_id="20260830_120000",
         run_dir=tmp_path,
         downloaded_count=1,
     )
@@ -200,7 +200,7 @@ def test_cli_download_by_input_file_success(tmp_path: Path):
             [
                 "download",
                 "--run-id",
-                "20260830_120000_abc123",
+                "20260830_120000",
                 "--input",
                 str(reviews_file),
             ],
@@ -209,7 +209,7 @@ def test_cli_download_by_input_file_success(tmp_path: Path):
         assert "下载与结构化解析完成" in result.output
         assert "kp analyze --run-id" in result.output
         mock_run.assert_called_once_with(
-            run_id="20260830_120000_abc123",
+            run_id="20260830_120000",
             target_ids=None,
             reviews_content=reviews_content,
             min_score=70,
@@ -225,7 +225,7 @@ def test_cli_download_by_input_stdin_success(tmp_path: Path):
 
     runner = CliRunner()
     fake_result = DownloadResult(
-        run_id="20260830_120000_abc123",
+        run_id="20260830_120000",
         run_dir=tmp_path,
         downloaded_count=1,
     )
@@ -237,7 +237,7 @@ def test_cli_download_by_input_stdin_success(tmp_path: Path):
             [
                 "download",
                 "--run-id",
-                "20260830_120000_abc123",
+                "20260830_120000",
                 "--input",
                 "-",
             ],
@@ -247,7 +247,7 @@ def test_cli_download_by_input_stdin_success(tmp_path: Path):
         assert "下载与结构化解析完成" in result.output
         assert "kp analyze --run-id" in result.output
         mock_run.assert_called_once_with(
-            run_id="20260830_120000_abc123",
+            run_id="20260830_120000",
             target_ids=None,
             reviews_content=stdin_data,
             min_score=70,
@@ -261,7 +261,7 @@ def test_cli_download_input_file_not_found(tmp_path: Path):
         [
             "download",
             "--run-id",
-            "20260830_120000_abc123",
+            "20260830_120000",
             "--input",
             str(tmp_path / "nonexistent.json"),
         ],
@@ -278,7 +278,7 @@ def test_cli_download_value_error():
     ):
         result = runner.invoke(
             main,
-            ["download", "--run-id", "20260830_120000_abc123", "--id", "id1@test"],
+            ["download", "--run-id", "20260830_120000", "--id", "id1@test"],
         )
         assert result.exit_code == 1
         assert "解析 AI 评审结果 JSON 失败" in result.output
@@ -292,7 +292,7 @@ def test_cli_download_file_not_found_error():
     ):
         result = runner.invoke(
             main,
-            ["download", "--run-id", "20260830_120000_abc123", "--id", "id1@test"],
+            ["download", "--run-id", "20260830_120000", "--id", "id1@test"],
         )
         assert result.exit_code == 1
         assert "会话或文件不存在" in result.output
@@ -308,7 +308,7 @@ def test_cli_download_b4_error():
     ):
         result = runner.invoke(
             main,
-            ["download", "--run-id", "20260830_120000_abc123", "--id", "id1@test"],
+            ["download", "--run-id", "20260830_120000", "--id", "id1@test"],
         )
         assert result.exit_code == 1
         assert "b4 command timed out" in result.output
@@ -322,7 +322,7 @@ def test_cli_download_unexpected_error():
     ):
         result = runner.invoke(
             main,
-            ["download", "--run-id", "20260830_120000_abc123", "--id", "id1@test"],
+            ["download", "--run-id", "20260830_120000", "--id", "id1@test"],
         )
         assert result.exit_code == 1
         assert "未知错误: unexpected storage crash" in result.output
@@ -361,7 +361,7 @@ def test_cli_analyze_dry_run_success(tmp_path: Path):
 
     runner = CliRunner()
     fake_res = AnalyzeRunResult(
-        run_id="20260830_120000_abc123",
+        run_id="20260830_120000",
         analyses=[
             PatchsetAnalysis(
                 msgid="<p1@test>",
@@ -380,13 +380,13 @@ def test_cli_analyze_dry_run_success(tmp_path: Path):
     ) as mock_run:
         result = runner.invoke(
             main,
-            ["analyze", "--run-id", "20260830_120000_abc123", "--dry-run"],
+            ["analyze", "--run-id", "20260830_120000", "--dry-run"],
         )
         assert result.exit_code == 0
         assert "完整性检查完成" in result.output
         assert "p1_test" in result.output
         mock_run.assert_called_once_with(
-            run_id="20260830_120000_abc123",
+            run_id="20260830_120000",
             target_ids=None,
             agent_type=None,
             concurrency=None,
@@ -400,7 +400,7 @@ def test_cli_analyze_success(tmp_path: Path):
 
     runner = CliRunner()
     fake_res = AnalyzeRunResult(
-        run_id="20260830_120000_abc123",
+        run_id="20260830_120000",
         analyses=[
             PatchsetAnalysis(
                 msgid="<p1@test>",
@@ -422,7 +422,7 @@ def test_cli_analyze_success(tmp_path: Path):
             [
                 "analyze",
                 "--run-id",
-                "20260830_120000_abc123",
+                "20260830_120000",
                 "--id",
                 "p1@test",
                 "--agent",
@@ -436,7 +436,7 @@ def test_cli_analyze_success(tmp_path: Path):
         assert "成功分析数: 1" in result.output
         assert "p1_test.md" in result.output
         mock_run.assert_called_once_with(
-            run_id="20260830_120000_abc123",
+            run_id="20260830_120000",
             target_ids=["p1@test"],
             agent_type="opencode",
             concurrency=2,
@@ -450,7 +450,7 @@ def test_cli_analyze_partial_failure(tmp_path: Path):
 
     runner = CliRunner()
     fake_res = AnalyzeRunResult(
-        run_id="20260830_120000_abc123",
+        run_id="20260830_120000",
         analyses=[
             PatchsetAnalysis(
                 msgid="<p1@test>",
@@ -474,7 +474,7 @@ def test_cli_analyze_partial_failure(tmp_path: Path):
     with patch("kp.core.analyze_pipeline.AnalyzePipeline.run", return_value=fake_res):
         result = runner.invoke(
             main,
-            ["analyze", "--run-id", "20260830_120000_abc123"],
+            ["analyze", "--run-id", "20260830_120000"],
         )
         assert result.exit_code == 0
         assert "深度技术分析完成" in result.output
@@ -500,7 +500,7 @@ def test_cli_analyze_value_error():
         "kp.core.analyze_pipeline.AnalyzePipeline.run",
         side_effect=ValueError("Invalid agent type"),
     ):
-        result = runner.invoke(main, ["analyze", "--run-id", "20260830_120000_abc123"])
+        result = runner.invoke(main, ["analyze", "--run-id", "20260830_120000"])
         assert result.exit_code == 1
         assert "Invalid agent type" in result.output
 
@@ -513,7 +513,7 @@ def test_cli_analyze_agent_error():
         "kp.core.analyze_pipeline.AnalyzePipeline.run",
         side_effect=AgentExecutionError("Agent binary crashed"),
     ):
-        result = runner.invoke(main, ["analyze", "--run-id", "20260830_120000_abc123"])
+        result = runner.invoke(main, ["analyze", "--run-id", "20260830_120000"])
         assert result.exit_code == 1
         assert "Agent binary crashed" in result.output
 
@@ -524,7 +524,7 @@ def test_cli_analyze_unexpected_error():
         "kp.core.analyze_pipeline.AnalyzePipeline.run",
         side_effect=RuntimeError("something unexpected"),
     ):
-        result = runner.invoke(main, ["analyze", "--run-id", "20260830_120000_abc123"])
+        result = runner.invoke(main, ["analyze", "--run-id", "20260830_120000"])
         assert result.exit_code == 1
         assert "未知错误: something unexpected" in result.output
 
@@ -532,7 +532,7 @@ def test_cli_analyze_unexpected_error():
 def test_cli_analyze_with_skipped_and_force(tmp_path: Path):
     runner = CliRunner()
     fake_res = AnalyzeRunResult(
-        run_id="20260830_120000_abc123",
+        run_id="20260830_120000",
         analyses=[
             PatchsetAnalysis(
                 msgid="<p1@test>",
@@ -560,7 +560,7 @@ def test_cli_analyze_with_skipped_and_force(tmp_path: Path):
     ) as mock_run:
         result = runner.invoke(
             main,
-            ["analyze", "--run-id", "20260830_120000_abc123", "--force"],
+            ["analyze", "--run-id", "20260830_120000", "--force"],
         )
         assert result.exit_code == 0
         mock_run.assert_called_once()
@@ -572,7 +572,7 @@ def test_cli_analyze_with_skipped_and_force(tmp_path: Path):
 
 def test_cli_analyze_missing_kernel_path_error(tmp_path: Path):
     data_dir = tmp_path / "runs"
-    session_dir = data_dir / "20260830_120000_abc123" / "patchsets" / "p1"
+    session_dir = data_dir / "20260830_120000" / "patchsets" / "p1"
     session_dir.mkdir(parents=True)
     (session_dir / "meta.json").write_text('{"msgid": "<p1>"}', encoding="utf-8")
 
@@ -597,7 +597,7 @@ path = ""
                 str(config_file),
                 "analyze",
                 "--run-id",
-                "20260830_120000_abc123",
+                "20260830_120000",
             ],
         )
         assert result.exit_code == 1

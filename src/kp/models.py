@@ -37,7 +37,7 @@ class Patchset(BaseModel):
 class RunManifest(BaseModel):
     """运行会话摘要清单"""
 
-    run_id: str  # 会话 ID (如 20260830_175000_3a8f1b)
+    run_id: str  # 会话 ID (如 20260830_175000)
     timestamp: str  # 执行时间戳 (ISO)
     query: str  # 执行的查询语句
     total_raw_messages: int  # 原始消息数

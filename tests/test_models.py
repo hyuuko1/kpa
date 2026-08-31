@@ -83,13 +83,13 @@ def test_patchset_defaults():
 
 def test_run_manifest():
     manifest = RunManifest(
-        run_id="20260830_175000_3a8f1b",
+        run_id="20260830_175000",
         timestamp="2026-08-30T17:50:00Z",
         query="l:linux-mm.kvack.org AND d:15.minutes.ago..",
         total_raw_messages=5,
         total_patchsets=2,
     )
-    assert manifest.run_id == "20260830_175000_3a8f1b"
+    assert manifest.run_id == "20260830_175000"
     assert manifest.timestamp == "2026-08-30T17:50:00Z"
     assert manifest.query == "l:linux-mm.kvack.org AND d:15.minutes.ago.."
     assert manifest.total_raw_messages == 5

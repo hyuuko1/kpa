@@ -66,12 +66,12 @@ uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago.."
 ```text
 [*] 执行查询: l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago..
 [✓] 抓取完成！
-    - 运行 ID: 20260830_141211_4d77bf
+    - 运行 ID: 20260830_141211
     - 原始邮件数: 35
     - 聚合 Patchset 数: 4
-    - 会话目录: /path/to/kp/data/runs/20260830_141211_4d77bf
+    - 会话目录: /path/to/kp/data/runs/20260830_141211
 
-[提示] 可使用 skill 'kernel-patch-analyzer' 进行补丁初筛与打分 (输出 reviews.json)，或直接执行 kp download --run-id 20260830_141211_4d77bf --id <target_id>。
+[提示] 可使用 skill 'kernel-patch-analyzer' 进行补丁初筛与打分 (输出 reviews.json)，或直接执行 kp download --run-id 20260830_141211 --id <target_id>。
 ```
 
 ### 2. 进行第一轮 AI 筛选打分
@@ -80,11 +80,11 @@ uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago.."
 ```json
 [
   {
-    "id": "20260830114731.8322-1-wujianyue000@gmail.com",
-    "title": "[RFC PATCH v4 0/3] mm/zswap: shrink zswap_entry via a fixed pool index",
+    "id": "20260830120000.12345-1-author@example.com",
+    "title": "[PATCH v2 0/2] mm/example: optimize memory allocation throughput",
     "score": 88,
     "recommend": true,
-    "reason": "优化 zswap 内存开销，改用固定数组索引，设计价值高"
+    "reason": "重构内存分配与回收路径，减少锁竞争并提升并发吞吐，具备较高技术价值"
   }
 ]
 ```
@@ -93,13 +93,13 @@ uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago.."
 
 ```bash
 # 方式 A：根据 AI 评审文件自动筛选并拉取高分 Patchset（默认 min-score 70）
-uv run kp download --run-id 20260830_141211_4d77bf --input reviews.json --min-score 80
+uv run kp download --run-id 20260830_141211 --input reviews.json --min-score 80
 
 # 方式 B：直接指定 Patchset Message-ID 进行拉取与拆解（支持指定多个 --id）
-uv run kp download --run-id 20260830_141211_4d77bf --id 20260830114731.8322-1-wujianyue000@gmail.com
+uv run kp download --run-id 20260830_141211 --id 20260830120000.12345-1-author@example.com
 
 # 方式 C：通过标准输入管道传入评审 JSON
-cat reviews.json | uv run kp download --run-id 20260830_141211_4d77bf --input -
+cat reviews.json | uv run kp download --run-id 20260830_141211 --input -
 ```
 
 ### 4. 阶段三：AI 深度技术剖析与报告生成 (`kp analyze`)
@@ -108,22 +108,22 @@ cat reviews.json | uv run kp download --run-id 20260830_141211_4d77bf --input -
 
 ```bash
 # 4.1 预检（Dry Run）：检查待分析补丁集直读文件完整性，不触发 Agent
-uv run kp analyze --run-id 20260830_141211_4d77bf --dry-run
+uv run kp analyze --run-id 20260830_141211 --dry-run
 
 # 4.2 全量深度分析：调用默认 Agent (agy) 分析该会话下所有已下载补丁集
-uv run kp analyze --run-id 20260830_141211_4d77bf
+uv run kp analyze --run-id 20260830_141211
 
 # 4.3 指定补丁集 ID 与指定 Agent / 并发度：
-uv run kp analyze --run-id 20260830_141211_4d77bf \
-    --id 20260830114731.8322-1-wujianyue000@gmail.com \
+uv run kp analyze --run-id 20260830_141211 \
+    --id 20260830120000.12345-1-author@example.com \
     --agent agy \
     --concurrency 2
 
 # 4.4 使用 opencode 运行分析：
-uv run kp analyze --run-id 20260830_141211_4d77bf --agent opencode
+uv run kp analyze --run-id 20260830_141211 --agent opencode
 
 # 4.5 强制重新分析（默认会自动跳过已生成有效报告的补丁集）：
-uv run kp analyze --run-id 20260830_141211_4d77bf --force
+uv run kp analyze --run-id 20260830_141211 --force
 
 ```
 

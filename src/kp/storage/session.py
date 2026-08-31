@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
@@ -30,8 +29,7 @@ class SessionManager:
         base_dir.mkdir(parents=True, exist_ok=True)
 
         now_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        rand_str = uuid.uuid4().hex[:6]
-        run_id = f"{now_str}_{rand_str}"
+        run_id = now_str
 
         run_dir = base_dir / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
