@@ -12,7 +12,7 @@ else:
 
 
 class SafetyConfig(BaseModel):
-    max_time_span_minutes: int = 180
+    max_time_span_hours: int = 48
     require_time_filter: bool = True
 
 
@@ -33,7 +33,7 @@ class AgentConfig(BaseModel):
     default: str = "agy"
     agy_cmd: str = "agy"
     opencode_cmd: str = "opencode"
-    timeout_seconds: int = 600
+    timeout_seconds: int = 1200
     concurrency: int = 1
 
 

@@ -6,7 +6,7 @@ from kp.config import load_config, AppConfig, B4Config
 def test_load_default_config():
     config = load_config(config_path=Path("non_existent_file.toml"))
     assert isinstance(config, AppConfig)
-    assert config.safety.max_time_span_minutes == 180
+    assert config.safety.max_time_span_hours == 48
     assert config.safety.require_time_filter is True
     assert config.lore.inbox_url == "https://lore.kernel.org/all/"
     assert config.lore.timeout_seconds == 60
@@ -20,7 +20,7 @@ def test_load_custom_toml_config(tmp_path: Path):
     custom_toml.write_text(
         """
 [safety]
-max_time_span_minutes = 60
+max_time_span_hours = 24
 require_time_filter = true
 
 [lore]
@@ -33,7 +33,7 @@ data_dir = "my_custom_runs"
         encoding="utf-8",
     )
     config = load_config(config_path=custom_toml)
-    assert config.safety.max_time_span_minutes == 60
+    assert config.safety.max_time_span_hours == 24
     assert config.lore.inbox_url == "https://lore.kernel.org/linux-mm/"
     assert config.lore.timeout_seconds == 30
     assert config.storage.data_dir == "my_custom_runs"
@@ -49,7 +49,7 @@ timeout_seconds = 45
         encoding="utf-8",
     )
     config = load_config(config_path=custom_toml)
-    assert config.safety.max_time_span_minutes == 180
+    assert config.safety.max_time_span_hours == 48
     assert config.lore.timeout_seconds == 45
     assert config.storage.data_dir == "data/runs"
 
@@ -59,7 +59,7 @@ def test_load_config_invalid_toml_fallback(tmp_path: Path):
     broken_toml.write_text("broken = [invalid toml", encoding="utf-8")
     config = load_config(config_path=broken_toml)
     assert isinstance(config, AppConfig)
-    assert config.safety.max_time_span_minutes == 180
+    assert config.safety.max_time_span_hours == 48
 
 
 def test_load_config_auto_discover_kp_toml(
@@ -128,7 +128,7 @@ def test_agent_config_defaults():
     assert config.agent.default == "agy"
     assert config.agent.agy_cmd == "agy"
     assert config.agent.opencode_cmd == "opencode"
-    assert config.agent.timeout_seconds == 600
+    assert config.agent.timeout_seconds == 1200
     assert config.agent.concurrency == 1
 
 

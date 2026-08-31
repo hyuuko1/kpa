@@ -1,6 +1,6 @@
 [safety]
-# 最大允许查询时间跨度（分钟），默认 180 分钟（3 小时）
-max_time_span_minutes = 3600
+# 最大允许查询时间跨度（小时），默认 48 小时
+max_time_span_hours = 48
 # 是否强制要求 query 必须包含 d: 时间范围
 require_time_filter = true
 
@@ -18,5 +18,5 @@ path = "/code/linux"
 default = "agy"
 agy_cmd = "agy"
 opencode_cmd = "opencode"
-timeout_seconds = 600
+timeout_seconds = 1200
 concurrency = 1

@@ -17,7 +17,7 @@
 3. **AI 直读友好 (AI-Friendly Direct Read)**：
    - 避免将海量 Diff 和多层讨论塞进庞大的深层 JSON 中，而是通过文件系统进行自然解耦（Markdown 说明、Markdown 引用讨论树、独立 `.patch` 文件），使 AI Agent 与人类无需编写脚本即可直接阅读。
 4. **安全受控 (Safety Controlled)**：
-   - 严格拦截无时间限制或跨度 > 3 小时的全量抓取查询，保护公共基础设施。
+   - 严格拦截无时间限制或跨度 > 48 小时的全量抓取查询，保护公共基础设施。
 
 ---
 
@@ -64,7 +64,7 @@
 
 ### 阶段一：元数据抓取、聚合与初步筛选 (Fetch & Clean)
 1. **输入**：用户输入 `lei q` 查询语句（必须包含 `d:` 时间过滤）。
-2. **安全校验**：`SafetyValidator` 校验查询跨度 <= 180 分钟。
+2. **安全校验**：`SafetyValidator` 校验查询跨度 <= 48 小时。
 3. **抓取**：`LoreClient` 执行 `lei q -t -f json` 拉取原始邮件元数据。
 4. **聚合**：`PatchsetAggregator` 通过并查集（Union-Find）聚合邮件线程，提取代表性 Message-ID 与补丁清单。
 5. **持久化**：`SessionManager` 保存 `manifest.json`、`raw_metadata.json` 与 `patchsets.json`。
@@ -125,7 +125,8 @@ data/runs/<run_id>/
 |---|---|---|
 | `src/kp/config.py` | `AppConfig`, `SafetyConfig`, `LoreConfig`, `B4Config`, `StorageConfig`, `AgentConfig`, `KernelConfig` | TOML 配置解析、默认值回退与环境变量管理 |
 | `src/kp/models.py` | `RawMessage`, `Patchset`, `PatchReview`, `ParsedComment`, `ParsedPatch`, `ParsedCoverLetter`, `ParsedPatchset`, `PatchsetAnalysis`, `AnalyzeRunResult`, `RunManifest` | 全局强类型 Pydantic 数据模型 |
-| `src/kp/adapters/lore.py` | `LoreClient`, `SafetyValidator` | `lei q` 外部调用与时间跨度（<=3h）强制安全拦截 |
+| `src/kp/adapters/lore.py` | `LoreClient`, `SafetyValidator` | `lei q` 外部调用与时间跨度（<=48h）强制安全拦截 |
+
 | `src/kp/adapters/b4.py` | `B4Client` | `b4 mbox` 外部调用、超时控制与 MsgID 安全转义 |
 | `src/kp/adapters/agent.py` | `BaseAgentRunner`, `AgyAgentRunner`, `OpenCodeAgentRunner`, `get_agent_runner` | 外部 AI Agent (agy / opencode) 子进程调用、内核代码路径参数传递与产物后置校验 |
 | `src/kp/core/aggregator.py` | `PatchsetAggregator` | 邮件主题正则解析、并查集线程聚合与代表 ID 提取 |

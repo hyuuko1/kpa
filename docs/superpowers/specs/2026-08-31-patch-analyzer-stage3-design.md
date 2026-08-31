@@ -159,7 +159,7 @@ path = "/code/linux"         # Linux 内核源代码路径
 default = "agy"              # 默认使用的 Agent 类型: "agy" | "opencode"
 agy_cmd = "agy"              # agy CLI 可执行路径
 opencode_cmd = "opencode"    # opencode CLI 可执行路径
-timeout_seconds = 600        # 单个补丁集分析超时时间 (秒)
+timeout_seconds = 1200       # 单个补丁集分析超时时间 (秒，默认 20 分钟)
 concurrency = 1              # 并发分析数 (默认为 1 串行)
 ```
 
@@ -171,7 +171,7 @@ class AgentConfig(BaseModel):
     default: str = "agy"
     agy_cmd: str = "agy"
     opencode_cmd: str = "opencode"
-    timeout_seconds: int = 600
+    timeout_seconds: int = 1200
     concurrency: int = 1
 
 class AppConfig(BaseModel):
@@ -213,9 +213,10 @@ class AnalyzeRunResult(BaseModel):
 #### 接口定义
 ```python
 class BaseAgentRunner(ABC):
-    def __init__(self, cmd: str, timeout_seconds: int = 600) -> None:
+    def __init__(self, cmd: str, timeout_seconds: int = 1200) -> None:
         self.cmd = cmd
         self.timeout_seconds = timeout_seconds
+
 
     @abstractmethod
     def check_available(self) -> bool:

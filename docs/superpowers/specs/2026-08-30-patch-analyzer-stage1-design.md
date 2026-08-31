@@ -153,12 +153,14 @@ class RunManifest(BaseModel):
    - 若未提供 `d:` 条件，立即抛出 `SafetyValidationError`，阻止拉取全量数据。
 2. **时间跨度限制**：
    - **相对时间语法**：
-     - `d:X.hours.ago..`：校验 $X \times 60 \le \text{max\_time\_span\_minutes}$（默认 180 分钟）；
-     - `d:X.minutes.ago..`：校验 $X \le \text{max\_time\_span\_minutes}$；
-     - 禁止使用 `day`, `week`, `month`, `year` 等大粒度跨度（除非配置放宽限制）。
+     - `d:X.hours.ago..`：校验 $X \le \text{max\_time\_span\_hours}$（默认 48 小时）；
+     - `d:X.minutes.ago..`：校验 $X / 60 \le \text{max\_time\_span\_hours}$；
+     - `d:X.days.ago..`：校验 $X \times 24 \le \text{max\_time\_span\_hours}$；
+     - 禁止使用 `week`, `month`, `year` 等大粒度跨度（除非配置放宽限制）。
    - **绝对时间语法**：
-     - `d:YYYY-MM-DDTHH:MM:SSZ..`：计算与当前时间的跨度，必须 $\le \text{max\_time\_span\_minutes}$。
+     - `d:YYYY-MM-DDTHH:MM:SSZ..`：计算与当前时间的跨度，必须 $\le \text{max\_time\_span\_hours}$。
    - 超出限制一律抛出 `SafetyValidationError`，并输出明确友好的修复提示。
+
 
 ### 5.2 `LoreClient`
 - 命令构造：`lei q -t -I <inbox_url> "<query>" -f json`

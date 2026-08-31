@@ -23,10 +23,10 @@
   - 杜绝生成几万行嵌套转义字符串的深层单 JSON 文件；
   - 自动生成 `00-cover-letter.md`、`discussions.md`（论坛式 `>` 引用排版）与 `patches/*.patch`，AI Agent 直接使用文件查看工具阅读，**零 Python 脚本提取开销**。
 - **安全受控**：
-  - 内置 `SafetyValidator` 强制校验查询时间跨度不得超过 3 小时（解析 `d:` 条件），保护内核邮件公共基础设施。
+  - 内置 `SafetyValidator` 强制校验查询时间跨度不得超过 48 小时（解析 `d:` 条件），保护内核邮件公共基础设施。
 - **强类型与高测试覆盖**：
   - 基于 Pydantic v2 进行严格数据建模与强类型校验；
-  - 139+ 单元与集成测试 100% 通过（TDD 驱动开发）。
+  - 150+ 单元与集成测试 100% 通过（TDD 驱动开发）。
 
 ---
 
@@ -179,8 +179,8 @@ data/runs/<run_id>/
 
 ```toml
 [safety]
-# 最大允许查询时间跨度（分钟），默认 180 分钟（3 小时）
-max_time_span_minutes = 180
+# 最大允许查询时间跨度（小时），默认 48 小时
+max_time_span_hours = 48
 # 是否强制要求 query 必须包含 d: 时间范围
 require_time_filter = true
 
@@ -194,6 +194,10 @@ timeout_seconds = 60
 # b4 命令执行超时时间（秒）
 timeout_seconds = 120
 
+[kernel]
+# Linux 内核源代码路径
+path = "/code/linux"
+
 [storage]
 # 数据持久化根目录
 data_dir = "data/runs"
@@ -205,11 +209,12 @@ default = "agy"
 agy_cmd = "agy"
 # opencode 命令行可执行文件路径或名称
 opencode_cmd = "opencode"
-# 单个 Agent 分析超时时间（秒）
-timeout_seconds = 600
+# 单个 Agent 分析超时时间（秒，默认 20 分钟）
+timeout_seconds = 1200
 # 并发分析数
 concurrency = 1
 ```
+
 
 ---
 

@@ -10,7 +10,7 @@ def test_lore_client_success():
     lore_config = LoreConfig(
         inbox_url="https://lore.kernel.org/all/", timeout_seconds=10
     )
-    safety_config = SafetyConfig(max_time_span_minutes=180, require_time_filter=True)
+    safety_config = SafetyConfig(max_time_span_hours=48, require_time_filter=True)
     client = LoreClient(lore_config, safety_config)
 
     with (

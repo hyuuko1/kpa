@@ -53,17 +53,19 @@ class SafetyValidator:
             val = int(rel_match.group(1))
             unit = rel_match.group(2).lower()
             if unit.startswith("minute"):
-                span_minutes = val
+                span_hours = val / 60.0
             elif unit.startswith("hour"):
-                span_minutes = val * 60
+                span_hours = float(val)
+            elif unit.startswith("day"):
+                span_hours = float(val * 24)
             else:
                 raise SafetyValidationError(
-                    f"安全限制：禁止使用大粒度时间单位 '{unit}'，测试模式下最多允许 {self.config.max_time_span_minutes} 分钟 (如 d:2.hours.ago..)"
+                    f"安全限制：禁止使用大粒度时间单位 '{unit}'，最多允许 {self.config.max_time_span_hours} 小时 (如 d:48.hours.ago..)"
                 )
 
-            if span_minutes > self.config.max_time_span_minutes:
+            if span_hours > self.config.max_time_span_hours:
                 raise SafetyValidationError(
-                    f"安全限制：查询时间跨度 {span_minutes} 分钟超过最大允许限制 {self.config.max_time_span_minutes} 分钟"
+                    f"安全限制：查询时间跨度 {span_hours:g} 小时超过最大允许限制 {self.config.max_time_span_hours} 小时"
                 )
             return
 
@@ -79,10 +81,10 @@ class SafetyValidator:
             if delta_seconds < 0:
                 # 未来的时间，合法
                 return
-            delta_minutes = delta_seconds / 60.0
-            if delta_minutes > (self.config.max_time_span_minutes + 5):  # 容差 5 分钟
+            delta_hours = delta_seconds / 3600.0
+            if delta_hours > (self.config.max_time_span_hours + 0.1):  # 容差约 6 分钟
                 raise SafetyValidationError(
-                    f"安全限制：绝对时间 {expr} 距离当前约 {int(delta_minutes)} 分钟，超过最大允许限制 {self.config.max_time_span_minutes} 分钟"
+                    f"安全限制：绝对时间 {expr} 距离当前约 {delta_hours:.1f} 小时，超过最大允许限制 {self.config.max_time_span_hours} 小时"
                 )
         except ValueError:
             # 无法解析的特殊 approxidate 格式，若不是明显合法则进行提示

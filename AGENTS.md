@@ -43,7 +43,8 @@
    - 避免生成超大且深层嵌套的单 JSON 文件。
    - 补丁集应拆解为直读 Markdown（`00-cover-letter.md`、`discussions.md`）和原生补丁（`patches/*.patch`），辅以轻量 `meta.json`。
 3. **严格安全受控**:
-   - `SafetyValidator` 强制校验查询时间跨度不得超过 3 小时（解析 `d:` 条件），防止滥用基础设施。
+   - `SafetyValidator` 强制校验查询时间跨度不得超过 48 小时（解析 `d:` 条件），防止滥用基础设施。
+
 
 ---
 

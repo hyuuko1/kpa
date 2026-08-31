@@ -27,7 +27,7 @@ class AgentTimeoutError(AgentError):
 class BaseAgentRunner(ABC):
     """Abstract base class for external AI agent runners."""
 
-    def __init__(self, cmd: str, timeout_seconds: int = 600) -> None:
+    def __init__(self, cmd: str, timeout_seconds: int = 1200) -> None:
         self.cmd = cmd
         self.timeout_seconds = timeout_seconds
 

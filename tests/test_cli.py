@@ -34,7 +34,7 @@ def test_cli_fetch_success(tmp_path: Path):
 def test_cli_fetch_safety_violation():
     runner = CliRunner()
     # Big granularity prohibited
-    result = runner.invoke(main, ["fetch", "--query", "l:linux-mm AND d:1.day.ago.."])
+    result = runner.invoke(main, ["fetch", "--query", "l:linux-mm AND d:1.week.ago.."])
     assert result.exit_code != 0
     assert "安全限制" in result.output
 
@@ -76,7 +76,7 @@ def test_cli_custom_config(tmp_path: Path):
     config_file.write_text(
         f"""
 [safety]
-max_time_span_minutes = 60
+max_time_span_hours = 2
 require_time_filter = true
 
 [lore]
