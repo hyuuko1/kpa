@@ -118,6 +118,26 @@ def test_agy_runner_custom_skill(mock_run, mock_which, tmp_path):
 
 @patch("shutil.which", return_value="/usr/bin/agy")
 @patch("subprocess.run")
+def test_agy_runner_with_kernel_path(mock_run, mock_which, tmp_path):
+    patchset_dir = tmp_path / "patchset"
+    patchset_dir.mkdir()
+    report_file = tmp_path / "report.md"
+
+    def side_effect(cmd, **kwargs):
+        report_file.write_text("# Report", encoding="utf-8")
+        return MagicMock(returncode=0, stdout="OK", stderr="")
+
+    mock_run.side_effect = side_effect
+
+    runner = AgyAgentRunner(cmd="agy")
+    runner.run_analysis(patchset_dir, report_file, kernel_path="/code/linux")
+
+    args, _ = mock_run.call_args
+    assert "Linux 内核代码路径：/code/linux" in args[0][2]
+
+
+@patch("shutil.which", return_value="/usr/bin/agy")
+@patch("subprocess.run")
 def test_agy_runner_execution_failure(mock_run, mock_which, tmp_path):
     patchset_dir = tmp_path / "patchset"
     patchset_dir.mkdir()
@@ -215,6 +235,26 @@ def test_opencode_runner_successful_execution(mock_run, mock_which, tmp_path):
     assert "kernel-patch-analyzer" in args[0][2]
     assert str(patchset_dir.resolve()) in args[0][2]
     assert kwargs.get("timeout") == 180
+
+
+@patch("shutil.which", return_value="/usr/bin/opencode")
+@patch("subprocess.run")
+def test_opencode_runner_with_kernel_path(mock_run, mock_which, tmp_path):
+    patchset_dir = tmp_path / "patchset"
+    patchset_dir.mkdir()
+    report_file = tmp_path / "report.md"
+
+    def side_effect(cmd, **kwargs):
+        report_file.write_text("# OpenCode Report", encoding="utf-8")
+        return MagicMock(returncode=0, stdout="OK", stderr="")
+
+    mock_run.side_effect = side_effect
+
+    runner = OpenCodeAgentRunner(cmd="opencode")
+    runner.run_analysis(patchset_dir, report_file, kernel_path="/code/linux")
+
+    args, _ = mock_run.call_args
+    assert "Linux 内核代码路径：/code/linux" in args[0][2]
 
 
 @patch("shutil.which", return_value="/usr/bin/opencode")

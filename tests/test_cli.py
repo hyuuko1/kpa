@@ -568,3 +568,38 @@ def test_cli_analyze_with_skipped_and_force(tmp_path: Path):
         assert "已跳过" in result.output or "跳过" in result.output
         assert "成功分析数: 1" in result.output
         assert "跳过分析数: 1" in result.output
+
+
+def test_cli_analyze_missing_kernel_path_error(tmp_path: Path):
+    data_dir = tmp_path / "runs"
+    session_dir = data_dir / "20260830_120000_abc123" / "patchsets" / "p1"
+    session_dir.mkdir(parents=True)
+    (session_dir / "meta.json").write_text('{"msgid": "<p1>"}', encoding="utf-8")
+
+    config_file = tmp_path / "no_kernel.toml"
+    config_file.write_text(
+        f"""
+[storage]
+data_dir = "{data_dir}"
+
+[kernel]
+path = ""
+""",
+        encoding="utf-8",
+    )
+
+    runner = CliRunner()
+    with patch("kp.core.analyze_pipeline.get_agent_runner") as mock_get_runner:
+        result = runner.invoke(
+            main,
+            [
+                "-c",
+                str(config_file),
+                "analyze",
+                "--run-id",
+                "20260830_120000_abc123",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "未配置 Linux 内核代码路径" in result.output
+        mock_get_runner.assert_not_called()

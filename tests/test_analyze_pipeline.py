@@ -21,13 +21,14 @@ class DummyRunner(BaseAgentRunner):
         self,
         patchset_dir: Path,
         report_output_path: Path,
+        kernel_path: Path | str | None = None,
         skill_name: str = "kernel-patch-analyzer",
     ) -> None:
         import time
 
         if self.delay > 0:
             time.sleep(self.delay)
-        self.called_with.append((patchset_dir, report_output_path))
+        self.called_with.append((patchset_dir, report_output_path, kernel_path))
         if self.should_fail:
             raise AgentExecutionError("Analysis failed")
         report_output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -293,3 +294,56 @@ def test_analyze_pipeline_force_reanalyze(tmp_path):
     assert res.success_count == 1
     assert res.analyses[0].status == "success"
     assert len(dummy_runner.called_with) == 1
+
+
+def test_analyze_pipeline_missing_kernel_path_raises_error(tmp_path):
+    sm = SessionManager(tmp_path)
+    run_id = "test-run-no-kernel"
+    sm.create_session(run_id)
+
+    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1.mkdir(parents=True)
+    (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
+    (p1 / "00-cover-letter.md").write_text("Cover", encoding="utf-8")
+    (p1 / "patches").mkdir()
+
+    cfg = load_config(None)
+    cfg.storage.data_dir = str(tmp_path)
+    cfg.kernel.path = None  # Not configured
+    dummy_runner = DummyRunner(should_fail=False)
+    pipeline = AnalyzePipeline(cfg, sm)
+
+    with pytest.raises(ValueError, match="Linux 内核代码路径"):
+        pipeline.run(run_id, runner_override=dummy_runner)
+
+    assert len(dummy_runner.called_with) == 0
+
+    # Also test empty string
+    cfg.kernel.path = "   "
+    with pytest.raises(ValueError, match="Linux 内核代码路径"):
+        pipeline.run(run_id, runner_override=dummy_runner)
+
+    assert len(dummy_runner.called_with) == 0
+
+
+def test_analyze_pipeline_passes_kernel_path_to_runner(tmp_path):
+    sm = SessionManager(tmp_path)
+    run_id = "test-run-kernel-pass"
+    sm.create_session(run_id)
+
+    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1.mkdir(parents=True)
+    (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
+    (p1 / "00-cover-letter.md").write_text("Cover", encoding="utf-8")
+    (p1 / "patches").mkdir()
+
+    cfg = load_config(None)
+    cfg.storage.data_dir = str(tmp_path)
+    cfg.kernel.path = "/custom/linux/code"
+    dummy_runner = DummyRunner(should_fail=False)
+    pipeline = AnalyzePipeline(cfg, sm)
+
+    res = pipeline.run(run_id, runner_override=dummy_runner)
+    assert res.success_count == 1
+    assert len(dummy_runner.called_with) == 1
+    assert dummy_runner.called_with[0][2] == "/custom/linux/code"

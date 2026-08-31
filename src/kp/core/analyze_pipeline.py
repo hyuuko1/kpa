@@ -147,7 +147,15 @@ class AnalyzePipeline:
             )
 
         runner: Optional[BaseAgentRunner] = None
+        kernel_path: Optional[str] = None
         if not dry_run:
+            kernel_path = (
+                self.config.kernel.path if self.config.kernel is not None else None
+            )
+            if not kernel_path or not str(kernel_path).strip():
+                raise ValueError(
+                    "未配置 Linux 内核代码路径，请在配置文件中设置 [kernel].path"
+                )
             runner = runner_override or get_agent_runner(
                 agent_type or self.config.agent.default,
                 self.config.agent,
@@ -200,7 +208,7 @@ class AnalyzePipeline:
             t0 = time.time()
             try:
                 assert runner is not None
-                runner.run_analysis(p_dir, report_path)
+                runner.run_analysis(p_dir, report_path, kernel_path=kernel_path)
                 duration = round(time.time() - t0, 3)
                 return PatchsetAnalysis(
                     msgid=msgid,
@@ -209,6 +217,7 @@ class AnalyzePipeline:
                     report_path=report_path,
                     duration_seconds=duration,
                 )
+
             except Exception as e:
                 duration = round(time.time() - t0, 3)
                 logger.error("Analysis for patchset %s failed: %s", sanitized_id, e)

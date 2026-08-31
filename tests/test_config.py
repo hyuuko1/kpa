@@ -151,3 +151,21 @@ concurrency = 2
     assert config.agent.opencode_cmd == "my-opencode"
     assert config.agent.timeout_seconds == 300
     assert config.agent.concurrency == 2
+
+
+def test_kernel_config_defaults():
+    config = load_config(None)
+    assert config.kernel.path == "/code/linux"
+
+
+def test_load_config_with_kernel_section(tmp_path: Path):
+    custom_toml = tmp_path / "kernel_config.toml"
+    custom_toml.write_text(
+        """
+[kernel]
+path = "/custom/kernel/source"
+""",
+        encoding="utf-8",
+    )
+    config = load_config(config_path=custom_toml)
+    assert config.kernel.path == "/custom/kernel/source"

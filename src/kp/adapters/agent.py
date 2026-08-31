@@ -40,6 +40,7 @@ class BaseAgentRunner(ABC):
         self,
         patchset_dir: Path,
         report_output_path: Path,
+        kernel_path: Path | str | None = None,
         skill_name: str = "kernel-patch-analyzer",
     ) -> None:
         """Execute deep technical analysis on patchset using external agent."""
@@ -55,6 +56,7 @@ class AgyAgentRunner(BaseAgentRunner):
         self,
         patchset_dir: Path,
         report_output_path: Path,
+        kernel_path: Path | str | None = None,
         skill_name: str = "kernel-patch-analyzer",
     ) -> None:
         if not self.check_available():
@@ -62,7 +64,10 @@ class AgyAgentRunner(BaseAgentRunner):
                 f"Agent executable '{self.cmd}' not found in PATH."
             )
 
-        prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
+        if kernel_path:
+            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，Linux 内核代码路径：{kernel_path}"
+        else:
+            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
         args = [self.cmd, "-p", prompt]
 
         try:
@@ -99,6 +104,7 @@ class OpenCodeAgentRunner(BaseAgentRunner):
         self,
         patchset_dir: Path,
         report_output_path: Path,
+        kernel_path: Path | str | None = None,
         skill_name: str = "kernel-patch-analyzer",
     ) -> None:
         if not self.check_available():
@@ -106,7 +112,10 @@ class OpenCodeAgentRunner(BaseAgentRunner):
                 f"Agent executable '{self.cmd}' not found in PATH."
             )
 
-        prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
+        if kernel_path:
+            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，Linux 内核代码路径：{kernel_path}"
+        else:
+            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
         args = [self.cmd, "run", prompt]
 
         try:

@@ -81,10 +81,11 @@
 
 ### 阶段三：AI Agent 深度内核分析与独立报告生成 (Analyze & Report)
 1. **输入**：`kp analyze --run-id <ID> [--id <MSG_ID>] [--agent agy|opencode] [--force] [--dry-run]`。
-2. **前置防重与完整性校验**：
+2. **前置防重、内核路径与完整性校验**：
+   - 校验 Linux 内核源码树路径配置（`kernel.path`，默认 `/code/linux`），若未配置或为空则抛出错误并拦截，严禁调用 Agent；
    - 检查 `data/runs/<run_id>/reports/<sanitized_id>.md` 是否已存在且非空。若已存在且未指定 `--force`，自动跳过该补丁集以避免重复消耗算力；
    - 自动校验待分析补丁集直读文件完整性（`meta.json`、`patches/`、`00-cover-letter.md`）。
-3. **Agent 驱动**：`AgentRunner`（如 `AgyAgentRunner` / `OpenCodeAgentRunner`）以极简指令触发外部 Agent 加载 `kernel-patch-analyzer` skill (引用 `references/deep-analysis.md`)。
+3. **Agent 驱动**：`AgentRunner`（如 `AgyAgentRunner` / `OpenCodeAgentRunner`）以携带补丁集目录与 Linux 内核代码路径的指令触发外部 Agent 加载 `kernel-patch-analyzer` skill (引用 `references/deep-analysis.md`)。
 4. **5 大分析维度**：背景动机与架构设计、锁与并发安全、内存与资源生命周期、潜在回归与性能/兼容性风险、社区审阅洞察与争议点。
 5. **持久化**：每个补丁集独立生成并校验 Markdown 报告，保存在 `data/runs/<run_id>/reports/<sanitized_id>.md`。
 
@@ -122,20 +123,21 @@ data/runs/<run_id>/
 
 | 模块路径 | 核心类 / 函数 | 职责说明 |
 |---|---|---|
-| `src/kp/config.py` | `AppConfig`, `SafetyConfig`, `LoreConfig`, `B4Config`, `StorageConfig`, `AgentConfig` | TOML 配置解析、默认值回退与环境变量管理 |
+| `src/kp/config.py` | `AppConfig`, `SafetyConfig`, `LoreConfig`, `B4Config`, `StorageConfig`, `AgentConfig`, `KernelConfig` | TOML 配置解析、默认值回退与环境变量管理 |
 | `src/kp/models.py` | `RawMessage`, `Patchset`, `PatchReview`, `ParsedComment`, `ParsedPatch`, `ParsedCoverLetter`, `ParsedPatchset`, `PatchsetAnalysis`, `AnalyzeRunResult`, `RunManifest` | 全局强类型 Pydantic 数据模型 |
 | `src/kp/adapters/lore.py` | `LoreClient`, `SafetyValidator` | `lei q` 外部调用与时间跨度（<=3h）强制安全拦截 |
 | `src/kp/adapters/b4.py` | `B4Client` | `b4 mbox` 外部调用、超时控制与 MsgID 安全转义 |
-| `src/kp/adapters/agent.py` | `BaseAgentRunner`, `AgyAgentRunner`, `OpenCodeAgentRunner`, `get_agent_runner` | 外部 AI Agent (agy / opencode) 子进程调用与产物后置校验 |
+| `src/kp/adapters/agent.py` | `BaseAgentRunner`, `AgyAgentRunner`, `OpenCodeAgentRunner`, `get_agent_runner` | 外部 AI Agent (agy / opencode) 子进程调用、内核代码路径参数传递与产物后置校验 |
 | `src/kp/core/aggregator.py` | `PatchsetAggregator` | 邮件主题正则解析、并查集线程聚合与代表 ID 提取 |
 | `src/kp/core/parser.py` | `MboxParser` | Mbox 邮件解析、Git Trailers 提取、评论树环路检测与树形还原 |
 | `src/kp/core/formatters.py` | `render_cover_letter_md`, `render_discussions_md`, `render_patch_file`, `render_meta_json` | AI 直读友好型 Markdown 与 Patch 文件生成 |
 | `src/kp/core/pipeline.py` | `FetchPipeline` | 阶段一业务流水线编排 |
 | `src/kp/core/download_pipeline.py`| `DownloadPipeline` | 阶段二业务流水线编排 |
-| `src/kp/core/analyze_pipeline.py` | `AnalyzePipeline` | 阶段三业务流水线编排 (支持已分析防重跳过与并发调度) |
+| `src/kp/core/analyze_pipeline.py` | `AnalyzePipeline` | 阶段三业务流水线编排 (支持内核代码路径强制前置校验、已分析防重跳过与并发调度) |
 | `src/kp/storage/session.py` | `SessionManager` | 会话目录管理与各类数据/Markdown/Patch/Report 文件持久化 |
 | `src/kp/cli.py` | `main`, `fetch_cmd`, `download_cmd`, `analyze_cmd` | Click CLI 用户命令行接口 |
 | `.agents/skills/kernel-patch-analyzer/` | `SKILL.md`, `references/` | 统一项目级 Skill (渐进式披露引导全流程) |
+
 
 ---
 

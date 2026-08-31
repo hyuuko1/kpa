@@ -152,6 +152,9 @@ This skill guides AI agents through screening, downloading, and deeply analyzing
 
 ### 4.1 配置文件扩展 (`config.toml` & `src/kp/config.py`)
 ```toml
+[kernel]
+path = "/code/linux"         # Linux 内核源代码路径
+
 [agent]
 default = "agy"              # 默认使用的 Agent 类型: "agy" | "opencode"
 agy_cmd = "agy"              # agy CLI 可执行路径
@@ -161,6 +164,9 @@ concurrency = 1              # 并发分析数 (默认为 1 串行)
 ```
 
 ```python
+class KernelConfig(BaseModel):
+    path: Optional[str] = "/code/linux"
+
 class AgentConfig(BaseModel):
     default: str = "agy"
     agy_cmd: str = "agy"
@@ -171,6 +177,7 @@ class AgentConfig(BaseModel):
 class AppConfig(BaseModel):
     # ...
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    kernel: KernelConfig = Field(default_factory=KernelConfig)
 ```
 
 ### 4.2 数据模型定义 (`src/kp/models.py`)
@@ -219,6 +226,7 @@ class BaseAgentRunner(ABC):
         self,
         patchset_dir: Path,
         report_output_path: Path,
+        kernel_path: Optional[Union[Path, str]] = None,
         skill_name: str = "kernel-patch-analyzer",
     ) -> None:
         """调用外部 Agent 执行分析"""
@@ -232,13 +240,18 @@ class AgyAgentRunner(BaseAgentRunner):
         self,
         patchset_dir: Path,
         report_output_path: Path,
+        kernel_path: Optional[Union[Path, str]] = None,
         skill_name: str = "kernel-patch-analyzer",
     ) -> None:
         if not self.check_available():
             raise AgentNotFoundError(f"Agent executable '{self.cmd}' not found in PATH.")
 
-        prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
+        if kernel_path:
+            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，Linux 内核代码路径：{kernel_path}"
+        else:
+            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
         args = [self.cmd, "-p", prompt]
+
 
         try:
             res = subprocess.run(
@@ -266,13 +279,18 @@ class OpenCodeAgentRunner(BaseAgentRunner):
         self,
         patchset_dir: Path,
         report_output_path: Path,
+        kernel_path: Optional[Union[Path, str]] = None,
         skill_name: str = "kernel-patch-analyzer",
     ) -> None:
         if not self.check_available():
             raise AgentNotFoundError(f"Agent executable '{self.cmd}' not found in PATH.")
 
-        prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
+        if kernel_path:
+            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，Linux 内核代码路径：{kernel_path}"
+        else:
+            prompt = f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}"
         args = [self.cmd, "run", prompt]
+
 
         try:
             res = subprocess.run(

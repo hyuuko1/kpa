@@ -37,12 +37,17 @@ class AgentConfig(BaseModel):
     concurrency: int = 1
 
 
+class KernelConfig(BaseModel):
+    path: Optional[str] = "/code/linux"
+
+
 class AppConfig(BaseModel):
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     lore: LoreConfig = Field(default_factory=LoreConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     b4: B4Config = Field(default_factory=B4Config)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    kernel: KernelConfig = Field(default_factory=KernelConfig)
 
 
 def load_config(config_path: Optional[Path] = None) -> AppConfig:
