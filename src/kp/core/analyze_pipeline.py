@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import logging
 import time
@@ -10,7 +10,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from kp.adapters.agent import BaseAgentRunner, get_agent_runner
 from kp.config import AppConfig
 from kp.storage.paths import get_clean_id
-from kp.models import AnalyzeRunResult, Patchset, PatchsetAnalysis, PatchsetStatus
+from kp.models import (
+    AnalyzeRunResult,
+    PatchReview,
+    PatchsetAnalysis,
+    PatchsetStatus,
+)
 from kp.storage.session import SessionManager
 
 logger = logging.getLogger(__name__)
@@ -26,6 +31,60 @@ class AnalyzePipeline:
     ) -> None:
         self.config = config
         self.session_manager = session_manager or SessionManager(config.storage)
+
+    def _parse_reviews(self, reviews_content: str) -> List[PatchReview]:
+        """解析并校验 AI 评审结果 JSON 字符串 (0-10 分制)"""
+        text = reviews_content.strip()
+        if "```" in text:
+            start_idx = text.find("```")
+            end_idx = text.rfind("```")
+            if end_idx > start_idx:
+                inner = text[start_idx + 3 : end_idx].strip()
+            else:
+                inner = text[start_idx + 3 :].strip()
+
+            lines = inner.splitlines()
+            if lines and lines[0].strip().lower() in (
+                "json",
+                "jsonc",
+                "javascript",
+                "js",
+                "text",
+            ):
+                inner = "\n".join(lines[1:]).strip()
+            elif (
+                lines and not lines[0].strip().startswith(("{", "[")) and len(lines) > 1
+            ):
+                inner = "\n".join(lines[1:]).strip()
+            text = inner
+
+        try:
+            raw_data = json.loads(text)
+        except Exception as e:
+            raise ValueError(f"解析 AI 评审结果 JSON 失败: {e}") from e
+
+        if (
+            isinstance(raw_data, dict)
+            and "reviews" in raw_data
+            and isinstance(raw_data["reviews"], list)
+        ):
+            items = raw_data["reviews"]
+        elif isinstance(raw_data, list):
+            items = raw_data
+        else:
+            raise ValueError(
+                "AI 评审结果 JSON 格式不符合规范：必须为评审列表或包含 'reviews' 键的字典"
+            )
+
+        reviews: List[PatchReview] = []
+        for idx, item in enumerate(items):
+            try:
+                review = PatchReview.model_validate(item)
+                reviews.append(review)
+            except Exception as e:
+                raise ValueError(f"AI 评审结果第 {idx + 1} 项数据格式错误: {e}") from e
+
+        return reviews
 
     def _verify_patchset_integrity(
         self, patchset_dir: Path
@@ -60,8 +119,9 @@ class AnalyzePipeline:
 
     def run(
         self,
-        run_id: str,
         target_ids: Optional[List[str]] = None,
+        reviews_content: Optional[str] = None,
+        min_score: int = 7,
         agent_type: Optional[str] = None,
         concurrency: Optional[int] = None,
         dry_run: bool = False,
@@ -72,8 +132,9 @@ class AnalyzePipeline:
         """执行阶段三深度分析流水线
 
         Args:
-            run_id: 运行会话 ID
-            target_ids: 指定要分析的 Patchset ID 列表 (可选，默认分析全部已下载补丁集)
+            target_ids: 指定要分析的 Patchset ID 列表 (可选)
+            reviews_content: AI 评审结果 JSON 字符串 (可选)
+            min_score: 最低推荐分数阈值 (默认 7，基于 0-10 分制)
             agent_type: 指定调用的外部 Agent 类型 ('agy' 或 'opencode'，可选)
             concurrency: 并发分析数 (可选，默认使用配置值)
             dry_run: 是否仅执行完整性校验而不触发 Agent 调用
@@ -84,78 +145,38 @@ class AnalyzePipeline:
         Returns:
             AnalyzeRunResult: 包含各补丁集分析状态与报告路径的结果摘要
         """
-        run_dir = self.session_manager.get_run_dir(run_id)
-        if not run_dir.exists() or not run_dir.is_dir():
-            raise FileNotFoundError(f"Session '{run_id}' not found at {run_dir}")
-
-        # 收集该会话中包含的 patchsets 元数据
-        session_patchsets: List[Patchset] = []
-        for jname in ["filtered_patchsets.json", "patchsets.json"]:
-            jfile = run_dir / jname
-            if jfile.exists():
-                try:
-                    data = json.loads(jfile.read_text(encoding="utf-8"))
-                    for item in data:
-                        session_patchsets.append(Patchset.model_validate(item))
-                    if session_patchsets:
-                        break
-                except Exception:
-                    pass
-
-        # 收集已下载目录映射：(patchset_dir, msgid, clean_id, date_str)
-        dir_meta_map: List[Tuple[Path, str, str, Optional[str]]] = []
-
-        # 1. 尝试从全局资产库匹配
-        for ps in session_patchsets:
-            p_dir = self.session_manager.get_patchset_dir(ps.id, ps.date)
-            if p_dir.exists() and (p_dir / "meta.json").exists():
-                dir_meta_map.append((p_dir, ps.id, get_clean_id(ps.id), ps.date))
-
-        # 2. 兼容检查 run_dir / "patchsets" 目录
-        legacy_patchsets_dir = run_dir / "patchsets"
-        if legacy_patchsets_dir.exists() and legacy_patchsets_dir.is_dir():
-            for p_dir in sorted(legacy_patchsets_dir.iterdir(), key=lambda p: p.name):
-                if p_dir.is_dir():
-                    meta_file = p_dir / "meta.json"
-                    msgid = p_dir.name
-                    date_str = None
-                    if meta_file.exists():
-                        try:
-                            meta_dict = json.loads(
-                                meta_file.read_text(encoding="utf-8")
-                            )
-                            if isinstance(meta_dict, dict):
-                                msgid = (
-                                    meta_dict.get("msgid")
-                                    or meta_dict.get("id")
-                                    or p_dir.name
-                                )
-                                date_str = meta_dict.get("date")
-                        except Exception:
-                            pass
-                    clean_id = get_clean_id(str(msgid))
-                    if not any(d[2] == clean_id for d in dir_meta_map):
-                        dir_meta_map.append((p_dir, str(msgid), clean_id, date_str))
-
         items_to_process: List[Tuple[Optional[Path], str, str, Optional[str]]] = []
+        seen_clean_ids = set()
 
+        # 1. 如果提供了评审结果，进行解析与过滤
+        if reviews_content is not None:
+            reviews = self._parse_reviews(reviews_content)
+            for r in reviews:
+                clean_id = get_clean_id(r.id)
+                self.session_manager.db.update_patchset_review(
+                    clean_id, r.score, r.recommend, r.reason, title=r.title
+                )
+                if r.score >= min_score or r.recommend is True:
+                    if clean_id not in seen_clean_ids:
+                        seen_clean_ids.add(clean_id)
+                        db_rec = self.session_manager.db.get_patchset(clean_id)
+                        date_str = db_rec.date if db_rec else None
+                        p_dir = self.session_manager.find_patchset_dir(r.id, date_str)
+                        items_to_process.append((p_dir, r.id, clean_id, date_str))
+
+        # 2. 如果指定了 target_ids
         if target_ids:
             for tid in target_ids:
-                clean_tid = get_clean_id(tid)
-                matched = False
-                for p_dir, msgid, clean_id, date_str in dir_meta_map:
-                    if tid in (msgid, clean_id) or clean_tid in (msgid, clean_id):
-                        items_to_process.append((p_dir, msgid, clean_id, date_str))
-                        matched = True
-                        break
-                if not matched:
-                    items_to_process.append((None, tid, clean_tid, None))
-        else:
-            items_to_process = dir_meta_map
+                clean_id = get_clean_id(tid)
+                if clean_id not in seen_clean_ids:
+                    seen_clean_ids.add(clean_id)
+                    db_rec = self.session_manager.db.get_patchset(clean_id)
+                    date_str = db_rec.date if db_rec else None
+                    p_dir = self.session_manager.find_patchset_dir(tid, date_str)
+                    items_to_process.append((p_dir, tid, clean_id, date_str))
 
         if not items_to_process:
             return AnalyzeRunResult(
-                run_id=run_id,
                 analyses=[],
                 total_count=0,
                 success_count=0,
@@ -187,7 +208,7 @@ class AnalyzePipeline:
                     msgid=msgid,
                     sanitized_id=clean_id,
                     status="failed",
-                    error_message=f"Patchset '{msgid}' not found in session '{run_id}'",
+                    error_message=f"Patchset '{msgid}' not found or not downloaded yet. Run 'kp download' first.",
                     duration_seconds=0.0,
                 )
 
@@ -201,30 +222,22 @@ class AnalyzePipeline:
                     duration_seconds=0.0,
                 )
 
-            # 优先使用全局 report path，兼容旧 run_dir reports
-            report_path = self.session_manager.get_report_path(msgid, date_str)
-            legacy_report_path = (
-                self.session_manager.get_run_dir(run_id) / "reports" / f"{clean_id}.md"
-            )
-
-            actual_report_path = report_path
-            if not actual_report_path.exists() and legacy_report_path.exists():
-                actual_report_path = legacy_report_path
+            report_path = self.session_manager.find_report_path(msgid, date_str)
 
             if dry_run:
                 return PatchsetAnalysis(
                     msgid=msgid,
                     sanitized_id=clean_id,
                     status="skipped",
-                    report_path=actual_report_path,
+                    report_path=report_path,
                     duration_seconds=0.0,
                 )
 
             # 检查是否已分析过该补丁集 (如果已存在非空报告且未指定 force，则跳过)
             db_record = self.session_manager.db.get_patchset(clean_id)
             is_already_analyzed = (
-                actual_report_path.exists()
-                and actual_report_path.stat().st_size > 0
+                report_path.exists()
+                and report_path.stat().st_size > 0
                 and (db_record is None or db_record.status == PatchsetStatus.ANALYZED)
             )
 
@@ -234,7 +247,7 @@ class AnalyzePipeline:
                     msgid=msgid,
                     sanitized_id=clean_id,
                     status="skipped",
-                    report_path=actual_report_path,
+                    report_path=report_path,
                     error_message="Already analyzed",
                     duration_seconds=0.0,
                 )
@@ -263,7 +276,6 @@ class AnalyzePipeline:
                     report_path=report_path,
                     duration_seconds=duration,
                 )
-
             except Exception as e:
                 duration = round(time.time() - t0, 3)
                 logger.error("Analysis for patchset %s failed: %s", clean_id, e)
@@ -275,30 +287,33 @@ class AnalyzePipeline:
                     duration_seconds=duration,
                 )
 
-        worker_count = (
-            concurrency if concurrency is not None else self.config.agent.concurrency
-        )
-        if worker_count is None or worker_count < 1:
-            worker_count = 1
+        max_workers = concurrency or self.config.agent.concurrency
+        results: List[PatchsetAnalysis] = []
 
-        if worker_count > 1 and len(items_to_process) > 1 and not dry_run:
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=worker_count
-            ) as executor:
-                analyses = list(executor.map(_process_item, items_to_process))
+        if len(items_to_process) <= 1 or max_workers <= 1:
+            for item in items_to_process:
+                results.append(_process_item(item))
         else:
-            analyses = [_process_item(item) for item in items_to_process]
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_item = {
+                    executor.submit(_process_item, item): item
+                    for item in items_to_process
+                }
+                for future in as_completed(future_to_item):
+                    results.append(future.result())
 
-        total_count = len(analyses)
-        success_count = sum(1 for a in analyses if a.status == "success")
-        failed_count = sum(1 for a in analyses if a.status == "failed")
-        skipped_count = sum(1 for a in analyses if a.status == "skipped")
+        # 按初始顺序排序
+        clean_id_order = {item[2]: idx for idx, item in enumerate(items_to_process)}
+        results.sort(key=lambda a: clean_id_order.get(a.sanitized_id, 0))
+
+        success_cnt = sum(1 for r in results if r.status == "success")
+        failed_cnt = sum(1 for r in results if r.status == "failed")
+        skipped_cnt = sum(1 for r in results if r.status == "skipped")
 
         return AnalyzeRunResult(
-            run_id=run_id,
-            analyses=analyses,
-            total_count=total_count,
-            success_count=success_count,
-            failed_count=failed_count,
-            skipped_count=skipped_count,
+            analyses=results,
+            total_count=len(results),
+            success_count=success_cnt,
+            failed_count=failed_cnt,
+            skipped_count=skipped_cnt,
         )

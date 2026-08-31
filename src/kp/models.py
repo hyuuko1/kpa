@@ -120,7 +120,6 @@ class PatchsetAnalysis(BaseModel):
 class AnalyzeRunResult(BaseModel):
     """阶段三全量分析运行摘要"""
 
-    run_id: str  # 会话 ID
     analyses: List[PatchsetAnalysis] = Field(
         default_factory=list
     )  # 各补丁集分析结果列表

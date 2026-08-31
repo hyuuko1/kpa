@@ -59,7 +59,7 @@ def fetch_cmd(ctx: click.Context, query: str, since_last: bool) -> None:
         click.echo(f"    - 聚合 Patchset 数: {result.patchset_count}")
         click.echo(f"    - 会话目录: {result.run_dir.resolve()}")
         click.secho(
-            f"\n[提示] 可使用 skill 'kernel-patch-analyzer' 进行补丁初筛与打分 (0-10分制，输出 reviews.json)，或直接执行 kp download --run-id {result.run_id} --id <target_id>。",
+            "\n[提示] 可使用 skill 'kernel-patch-analyzer' 进行补丁初筛与打分 (0-10分制，输出 reviews.json)，然后执行 kp download -i <reviews.json>，或直接执行 kp download --id <target_id>。",
             fg="cyan",
         )
     except SafetyValidationError as e:
@@ -74,11 +74,6 @@ def fetch_cmd(ctx: click.Context, query: str, since_last: bool) -> None:
 
 
 @main.command(name="download")
-@click.option(
-    "--run-id",
-    required=True,
-    help="指定阶段一运行会话 ID (run_id)",
-)
 @click.option(
     "--id",
     "target_ids",
@@ -107,7 +102,6 @@ def fetch_cmd(ctx: click.Context, query: str, since_last: bool) -> None:
 @click.pass_context
 def download_cmd(
     ctx: click.Context,
-    run_id: str,
     target_ids: Tuple[str, ...],
     input_file: str | None,
     min_score: int,
@@ -139,20 +133,17 @@ def download_cmd(
     pipeline = DownloadPipeline(app_config)
 
     try:
-        click.echo(f"[*] 开始执行阶段二流水线 (Run ID: {run_id})...")
+        click.echo("[*] 开始执行阶段二下载流水线...")
         result = pipeline.run(
-            run_id=run_id,
             target_ids=list(target_ids) if target_ids else None,
             reviews_content=reviews_content,
             min_score=min_score,
             force=force,
         )
         click.secho("[✓] 下载与结构化解析完成！", fg="green", bold=True)
-        click.echo(f"    - 运行 ID: {result.run_id}")
         click.echo(f"    - 成功下载并解析 Patchset 数: {result.downloaded_count}")
-        click.echo(f"    - 会话目录: {result.run_dir.resolve()}")
         click.secho(
-            f"\n[提示] 可执行 kp analyze --run-id {result.run_id} 启动 AI 深度技术分析与报告生成 (阶段三)。",
+            "\n[提示] 可执行 kp analyze -i <reviews.json> 或 kp analyze --id <target_id> 启动 AI 深度技术分析与报告生成 (阶段三)。",
             fg="cyan",
         )
     except FileNotFoundError as e:
@@ -171,15 +162,24 @@ def download_cmd(
 
 @main.command(name="analyze")
 @click.option(
-    "--run-id",
-    required=True,
-    help="指定运行会话 ID (run_id)",
-)
-@click.option(
     "--id",
     "target_ids",
     multiple=True,
-    help="指定要分析的 Patchset ID (可多次指定以包含多个补丁集，默认分析全量已下载补丁集)",
+    help="指定要分析的 Patchset ID (可多次指定以包含多个补丁集)",
+)
+@click.option(
+    "-i",
+    "--input",
+    "input_file",
+    type=click.Path(allow_dash=True, dir_okay=False),
+    help="AI 评审结果 JSON 文件路径或 - (从标准输入读取)",
+)
+@click.option(
+    "--min-score",
+    default=7,
+    type=click.IntRange(0, 10),
+    show_default=True,
+    help="最低评分过滤阈值 (0-10分制，低于该分数的补丁集将被过滤，除非 recommend=true)",
 )
 @click.option(
     "--agent",
@@ -220,8 +220,9 @@ def download_cmd(
 @click.pass_context
 def analyze_cmd(
     ctx: click.Context,
-    run_id: str,
     target_ids: Tuple[str, ...],
+    input_file: str | None,
+    min_score: int,
     agent: str | None,
     concurrency: int | None,
     dry_run: bool,
@@ -230,6 +231,27 @@ def analyze_cmd(
     prompt_file: Path | None,
 ) -> None:
     """阶段三：调用外部 AI Agent 进行深度代码与架构分析并生成独立报告"""
+    if not target_ids and not input_file:
+        click.secho(
+            "[错误] 请至少指定 --id 或 --input 参数以选择要分析的补丁集",
+            fg="red",
+            err=True,
+        )
+        sys.exit(1)
+
+    reviews_content: str | None = None
+    if input_file is not None:
+        if input_file == "-":
+            reviews_content = sys.stdin.read()
+        else:
+            p = Path(input_file)
+            if not p.exists():
+                click.secho(
+                    f"[错误] 评审结果文件不存在: {input_file}", fg="red", err=True
+                )
+                sys.exit(1)
+            reviews_content = p.read_text(encoding="utf-8")
+
     if prompt_file is not None:
         file_prompt = prompt_file.read_text(encoding="utf-8").strip()
         if custom_prompt:
@@ -242,13 +264,14 @@ def analyze_cmd(
 
     try:
         if dry_run:
-            click.echo(f"[*] 开始检查会话 {run_id} 补丁集完整性 (Dry Run)...")
+            click.echo("[*] 开始检查补丁集完整性 (Dry Run)...")
         else:
-            click.echo(f"[*] 开始执行阶段三深度分析流水线 (Run ID: {run_id})...")
+            click.echo("[*] 开始执行阶段三深度分析流水线...")
 
         result = pipeline.run(
-            run_id=run_id,
             target_ids=list(target_ids) if target_ids else None,
+            reviews_content=reviews_content,
+            min_score=min_score,
             agent_type=agent,
             concurrency=concurrency,
             dry_run=dry_run,
@@ -258,7 +281,6 @@ def analyze_cmd(
 
         if dry_run:
             click.secho("[✓] 完整性检查完成！", fg="green", bold=True)
-            click.echo(f"    - 运行 ID: {result.run_id}")
             click.echo(f"    - 待分析 Patchset 总数: {result.total_count}")
             for item in result.analyses:
                 if item.status == "skipped":
@@ -272,7 +294,6 @@ def analyze_cmd(
                     )
         else:
             click.secho("[✓] 深度技术分析完成！", fg="green", bold=True)
-            click.echo(f"    - 运行 ID: {result.run_id}")
             click.echo(f"    - 补丁集总数: {result.total_count}")
             click.echo(f"    - 成功分析数: {result.success_count}")
             if result.skipped_count > 0:

@@ -234,6 +234,7 @@ class DatabaseManager:
         score: Optional[int],
         recommend: Optional[bool],
         reason: Optional[str] = None,
+        title: Optional[str] = None,
     ) -> None:
         with self.get_connection() as conn:
             recommend_val = None
@@ -241,11 +242,15 @@ class DatabaseManager:
                 recommend_val = 1 if recommend else 0
             conn.execute(
                 """
-                UPDATE patchsets
-                SET score = ?, recommend = ?, review_reason = ?
-                WHERE id = ?
+                INSERT INTO patchsets (id, title, score, recommend, review_reason, status)
+                VALUES (?, ?, ?, ?, ?, 'fetched')
+                ON CONFLICT(id) DO UPDATE SET
+                    score = excluded.score,
+                    recommend = excluded.recommend,
+                    review_reason = excluded.review_reason,
+                    title = CASE WHEN excluded.title != excluded.id THEN excluded.title ELSE patchsets.title END;
                 """,
-                (score, recommend_val, reason, id),
+                (id, title or id, score, recommend_val, reason),
             )
             conn.commit()
 
@@ -254,24 +259,17 @@ class DatabaseManager:
         id: str,
         status: PatchsetStatus,
         downloaded_at: Optional[str] = None,
+        title: Optional[str] = None,
     ) -> None:
         with self.get_connection() as conn:
-            if downloaded_at is not None:
-                conn.execute(
-                    """
-                    UPDATE patchsets
-                    SET status = ?, downloaded_at = ?
-                    WHERE id = ?
-                    """,
-                    (status.value, downloaded_at, id),
-                )
-            else:
-                conn.execute(
-                    """
-                    UPDATE patchsets
-                    SET status = ?
-                    WHERE id = ?
-                    """,
-                    (status.value, id),
-                )
+            conn.execute(
+                """
+                INSERT INTO patchsets (id, title, status, downloaded_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    status = excluded.status,
+                    downloaded_at = COALESCE(excluded.downloaded_at, patchsets.downloaded_at);
+                """,
+                (id, title or id, status.value, downloaded_at),
+            )
             conn.commit()

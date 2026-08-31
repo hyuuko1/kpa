@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -20,8 +19,6 @@ logger = logging.getLogger(__name__)
 class DownloadResult(BaseModel):
     """阶段二下载与解析流水线执行结果"""
 
-    run_id: str
-    run_dir: Path
     downloaded_count: int
     parsed_patchsets: List[ParsedPatchset] = Field(default_factory=list)
 
@@ -30,7 +27,7 @@ DownloadRunResult = DownloadResult
 
 
 class DownloadPipeline:
-    """阶段二核心业务流水线：Reviews过滤 / 指定ID -> B4拉取 -> MboxParser清洗 -> SessionStorage持久化 + SQLite状态更新"""
+    """阶段二核心业务流水线：Reviews过滤 / 指定ID -> B4拉取 -> MboxParser清洗 -> 全局资产库持久化 + SQLite状态更新"""
 
     def __init__(
         self,
@@ -101,7 +98,6 @@ class DownloadPipeline:
 
     def run(
         self,
-        run_id: str,
         target_ids: Optional[List[str]] = None,
         reviews_content: Optional[str] = None,
         min_score: int = 7,
@@ -110,7 +106,6 @@ class DownloadPipeline:
         """执行下载与结构化清洗流水线
 
         Args:
-            run_id: 阶段一会话 ID
             target_ids: 直接指定的 Message-ID 列表 (可选)
             reviews_content: AI 评审结果 JSON 字符串 (可选)
             min_score: 最低推荐分数阈值 (默认 7，基于 0-10 分制)
@@ -119,56 +114,45 @@ class DownloadPipeline:
         Returns:
             DownloadRunResult: 包含下载统计与解析后补丁集列表的结果对象
         """
-        run_dir = self.session_manager.get_run_dir(run_id)
-        existing_patchsets = self.session_manager.load_patchsets(run_dir)
-        patchset_map = {get_clean_id(ps.id): ps for ps in existing_patchsets}
-        for ps in existing_patchsets:
-            patchset_map[ps.id] = ps
-
         target_patchsets: List[Patchset] = []
         seen_ids = set()
 
         # 1. 如果提供了评审结果，进行解析与过滤
         if reviews_content is not None:
             reviews = self._parse_reviews(reviews_content)
-            filtered_patchsets: List[Patchset] = []
-
             for r in reviews:
                 clean_id = get_clean_id(r.id)
                 # 更新 SQLite 中的评分
                 self.session_manager.db.update_patchset_review(
-                    clean_id, r.score, r.recommend, r.reason
+                    clean_id, r.score, r.recommend, r.reason, title=r.title
                 )
 
                 # 过滤规则：score >= min_score 或 recommend is True
                 if r.score >= min_score or r.recommend is True:
-                    ps = patchset_map.get(r.id) or patchset_map.get(clean_id)
-                    if not ps:
-                        ps = Patchset(
-                            id=r.id,
-                            title=r.title or r.id,
-                            author_name="",
-                            author_email="",
-                        )
+                    db_record = self.session_manager.db.get_patchset(clean_id)
+                    ps = Patchset(
+                        id=r.id,
+                        title=r.title or (db_record.title if db_record else r.id),
+                        author_name=(db_record.author or "") if db_record else "",
+                        author_email="",
+                        date=(db_record.date if db_record else None),
+                    )
                     if ps.id not in seen_ids:
                         seen_ids.add(ps.id)
-                        filtered_patchsets.append(ps)
-
-            self.session_manager.save_reviews(run_dir, reviews, filtered_patchsets)
-            target_patchsets.extend(filtered_patchsets)
+                        target_patchsets.append(ps)
 
         # 2. 如果额外/直接指定了 target_ids
         if target_ids:
             for tid in target_ids:
                 clean_id = get_clean_id(tid)
-                ps = patchset_map.get(tid) or patchset_map.get(clean_id)
-                if not ps:
-                    ps = Patchset(
-                        id=tid,
-                        title=tid,
-                        author_name="",
-                        author_email="",
-                    )
+                db_record = self.session_manager.db.get_patchset(clean_id)
+                ps = Patchset(
+                    id=tid,
+                    title=(db_record.title if db_record else tid),
+                    author_name=(db_record.author or "") if db_record else "",
+                    author_email="",
+                    date=(db_record.date if db_record else None),
+                )
                 if ps.id not in seen_ids:
                     seen_ids.add(ps.id)
                     target_patchsets.append(ps)
@@ -181,7 +165,7 @@ class DownloadPipeline:
             clean_id = get_clean_id(patchset_id)
             db_record = self.session_manager.db.get_patchset(clean_id)
 
-            latest_msg_date = ps.date
+            latest_msg_date = ps.date or (db_record.date if db_record else None)
             # 增量检查：无 force 且已下载过，且邮件日期不新于已下载时间 -> 跳过
             if not force and db_record and db_record.downloaded_at:
                 if latest_msg_date and latest_msg_date <= db_record.downloaded_at:
@@ -192,7 +176,7 @@ class DownloadPipeline:
                     )
                     continue
 
-            patchset_dir = self.session_manager.get_patchset_dir(ps.id, ps.date)
+            patchset_dir = self.session_manager.get_patchset_dir(ps.id, latest_msg_date)
 
             try:
                 mbox_path = self.b4_client.fetch_thread(
@@ -209,15 +193,23 @@ class DownloadPipeline:
                 patchset_id=patchset_id,
                 title=ps.title,
             )
+            parsed_date_str = (
+                ps.date
+                or (parsed_ps.cover_letter.date if parsed_ps.cover_letter else None)
+                or (
+                    parsed_ps.patches[0].date
+                    if parsed_ps.patches and parsed_ps.patches[0].date
+                    else None
+                )
+            )
             self.session_manager.save_parsed_patchset(
-                run_dir,
                 clean_id,
                 parsed_ps,
-                date_str=ps.date,
+                date_str=parsed_date_str,
             )
 
             now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-            report_path = self.session_manager.get_report_path(ps.id, ps.date)
+            report_path = self.session_manager.get_report_path(ps.id, parsed_date_str)
 
             # 状态流转规则：若原 status 为 ANALYZED 且报告非空存在，保持 ANALYZED，不降级为 DOWNLOADED
             if (
@@ -242,8 +234,6 @@ class DownloadPipeline:
             parsed_patchsets.append(parsed_ps)
 
         return DownloadRunResult(
-            run_id=run_id,
-            run_dir=run_dir,
             downloaded_count=len(parsed_patchsets),
             parsed_patchsets=parsed_patchsets,
         )

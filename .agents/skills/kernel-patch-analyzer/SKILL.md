@@ -30,8 +30,8 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 1. **理解意图**：将用户的自然语言需求转换为合法的 `lei q` 查询语句；
 2. **抓取**：运行 `uv run kp fetch -q "<query>"`，获取 `run_id`；
 3. **初筛打分**：读取 `data/runs/<run_id>/patchsets.json`，根据 [初筛指南](references/screening.md) 评估打分 (0-10 分制)，将结果写入 `data/runs/<run_id>/reviews.json`；
-4. **下载拆解**：运行 `uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json`；
-5. **深度分析**：直接运行 `uv run kp analyze --run-id <run_id> [--concurrency 3]`（注意：并发度最高不超过 3）。无需进行任何手动文件预检或探测，`kp analyze` 会自动完成所有前置校验，最终将报告保存至全局报告库 `data/reports/YYYY-MM/<clean_id>.md`。
+4. **下载拆解**：运行 `uv run kp download -i data/runs/<run_id>/reviews.json`；
+5. **深度分析**：直接运行 `uv run kp analyze -i data/runs/<run_id>/reviews.json [--concurrency 3]`（注意：并发度最高不超过 3）。无需进行任何手动文件预检或探测，`kp analyze` 会自动完成所有前置校验，最终将报告保存至全局报告库 `data/reports/YYYY-MM/<clean_id>.md`。
 
 ### 路径 A+：增量例行巡检 (Incremental Inspection)
 - 运行 `uv run kp fetch -q "<query>" --since-last`。
@@ -43,20 +43,20 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
   1. 读取 `data/runs/<run_id>/patchsets.json` (或 `manifest.json`)；
   2. 遵循 [初筛指南](references/screening.md) 完成打分与推荐判定 (0-10 整数制)；
   3. 将 JSON 格式结果写入 `data/runs/<run_id>/reviews.json`；
-  4. 提示用户或继续运行 `uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json`。
+  4. 提示用户或继续运行 `uv run kp download -i data/runs/<run_id>/reviews.json`。
 
 ### 路径 C：从补丁下载与拆解起步 (From Download)
 - **前置条件**：已生成 `reviews.json`，或用户明确指定要下载的 Patchset ID（如 `--id <msgid>`）。
 - **执行动作**：
-  - 基于评审结果下载：`uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json`
-  - 或指定特定 ID 下载：`uv run kp download --run-id <run_id> --id "<msgid>"`
+  - 基于评审结果下载：`uv run kp download -i data/runs/<run_id>/reviews.json`
+  - 或指定特定 ID 下载：`uv run kp download --id "<msgid>"`
   - 若已是最新，`kp` 会自动跳过重复下载；如需强制覆盖，可添加 `--force`。
   - `kp` 会自动将邮件线程拆解为全局直读友好文件（Cover Letter、Discussions Markdown 树、独立 `.patch` 文件与 `meta.json`）。
 
-### 路径 D：从深度技术分析起步 (From Deep Analysis)
-- **触发条件**：用户明确要求分析已下载单个补丁集或者全量分析。
+### 阶段 D：从深度技术分析起步 (From Deep Analysis)
+- **触发条件**：用户明确要求分析已下载单个补丁集或者基于评审结果批量分析。
 - **执行动作**：
-  - **直接执行命令**：直接运行 `uv run kp analyze --run-id <run_id> [--concurrency 3]`（全量分析）或 `uv run kp analyze --run-id <run_id> --id "<msgid>"`（指定分析单个补丁集）；
+  - **直接执行命令**：运行 `uv run kp analyze -i data/runs/<run_id>/reviews.json [--concurrency 3]`（基于评审分析）或 `uv run kp analyze --id "<msgid>"`（指定分析单个补丁集）；
   - 📝 **自定义关注提示词**：可通过 `-p / --prompt "重点关注..."` 或 `--prompt-file <path>` 追加针对特定业务逻辑或锁安全的重点分析要求；
   - 🔒 **并发度上限限制**：使用 `--concurrency` 时，**并发度严禁超过 3**（即 `--concurrency <= 3`，推荐设置为 2 或 3），避免启动过多外部 Agent 子进程造成系统负载过重或触发 API 配额限制；
   - ⚡ **零前置检查原则**：Agent **切勿**在执行前检查会话目录等是否存在，也**无需**预先运行 `--dry-run`。`kp analyze` 工具本身在执行时会自动进行所有的前置检查，遇错会输出清晰提示；
@@ -66,8 +66,8 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 - **执行动作**：
   - 若用户提供了指定 Message-ID，直接组合执行：
     ```bash
-    uv run kp download --run-id <run_id> --id "<msgid>"
-    uv run kp analyze --run-id <run_id> --id "<msgid>"
+    uv run kp download --id "<msgid>"
+    uv run kp analyze --id "<msgid>"
     ```
 
 ---
@@ -121,20 +121,20 @@ uv run kp fetch -q "<lei_query>"
 uv run kp fetch -q "<lei_query>" --since-last
 
 # 2. 下载补丁集 (支持基于 reviews.json 或指定 ID，支持 --force 强制更新)
-uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json
-uv run kp download --run-id <run_id> --id "<msgid_1>" --id "<msgid_2>"
-uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json --min-score 8
-uv run kp download --run-id <run_id> --id "<msgid>" --force
+uv run kp download -i data/runs/<run_id>/reviews.json
+uv run kp download --id "<msgid_1>" --id "<msgid_2>"
+uv run kp download -i data/runs/<run_id>/reviews.json --min-score 8
+uv run kp download --id "<msgid>" --force
 
-# 3. 执行阶段三深度分析 (支持自定义提示词与强制覆盖)
-uv run kp analyze --run-id <run_id>                                    # 全量分析该 run 下所有补丁集
-uv run kp analyze --run-id <run_id> --id "<msgid>"                     # 仅分析指定补丁集
-uv run kp analyze --run-id <run_id> -p "重点关注锁竞争与 RCU 同步"       # 追加自定义分析指令
-uv run kp analyze --run-id <run_id> --prompt-file custom_prompt.txt     # 从文件读取自定义分析指令
-uv run kp analyze --run-id <run_id> --agent opencode                   # 指定使用的外部 Agent
-uv run kp analyze --run-id <run_id> --concurrency 3                    # 设置并发数 (严禁超过 3)
-uv run kp analyze --run-id <run_id> --force                            # 强制重新分析已出报告的补丁集
-uv run kp analyze --run-id <run_id> --dry-run                          # 仅预检补丁集直读文件完整性
+# 3. 执行阶段三深度分析 (支持基于 reviews.json 或指定 ID，支持自定义提示词与强制覆盖)
+uv run kp analyze -i data/runs/<run_id>/reviews.json                  # 基于评审结果筛选分析
+uv run kp analyze --id "<msgid>"                                      # 仅分析指定补丁集
+uv run kp analyze -i reviews.json -p "重点关注锁竞争与 RCU 同步"      # 追加自定义分析指令
+uv run kp analyze -i reviews.json --prompt-file custom_prompt.txt     # 从文件读取自定义分析指令
+uv run kp analyze --id "<msgid>" --agent opencode                     # 指定使用的外部 Agent
+uv run kp analyze -i reviews.json --concurrency 3                     # 设置并发数 (严禁超过 3)
+uv run kp analyze --id "<msgid>" --force                              # 强制重新分析已出报告的补丁集
+uv run kp analyze --id "<msgid>" --dry-run                            # 仅预检补丁集直读文件完整性
 ```
 
 ---

@@ -254,20 +254,18 @@ def test_patchset_analysis_model():
     assert analysis_default.duration_seconds == 0.0
 
     run_result = AnalyzeRunResult(
-        run_id="run-1",
         analyses=[analysis, analysis_default],
         total_count=2,
         success_count=1,
         failed_count=1,
     )
-    assert run_result.run_id == "run-1"
     assert len(run_result.analyses) == 2
     assert run_result.total_count == 2
     assert run_result.success_count == 1
     assert run_result.failed_count == 1
 
     # Check defaults and serialization
-    empty_result = AnalyzeRunResult(run_id="run-empty")
+    empty_result = AnalyzeRunResult()
     assert empty_result.analyses == []
     assert empty_result.total_count == 0
     assert empty_result.success_count == 0

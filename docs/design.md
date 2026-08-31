@@ -87,8 +87,8 @@
 7. **AI 初筛引导**：外部 AI Agent 加载 `kernel-patch-analyzer` skill (引用 `references/screening.md`) 进行初筛（0-10 整数分制）并生成 `reviews.json`。
 
 ### 阶段二：AI 评审打分接入、完整拉取与直读拆解 (Download & Parse)
-1. **输入**：`kp download --run-id <ID> [--input reviews.json | --id <MSG_ID>] [--min-score 7] [--force]`。
-2. **过滤**：解析 AI 评审结果（0-10 分制，自动宽容提取 Markdown 代码块），过滤推荐项（`score >= min_score or recommend is True`），更新 SQLite 评分并保存 `reviews.json` 与 `filtered_patchsets.json`。
+1. **输入**：`kp download [--input reviews.json | --id <MSG_ID>] [--min-score 7] [--force]`（要求必须至少指定 `--id` 或 `-i/--input`，否则报错退出）。
+2. **过滤**：解析 AI 评审结果（0-10 分制，自动宽容提取 Markdown 代码块），过滤推荐项（`score >= min_score or recommend is True`），直接更新 SQLite 评分与推荐状态。
 3. **增量防重检查**：
    - 若未加 `--force` 且 `latest_msg_date <= db_record.downloaded_at`，自动跳过重复下载。
 4. **下载与解包**：
@@ -100,9 +100,10 @@
    - 否则：更新 `status = 'downloaded'`, `downloaded_at = now`。
 
 ### 阶段三：AI Agent 深度内核分析与独立报告生成 (Analyze & Report)
-1. **输入**：`kp analyze --run-id <ID> [--id <MSG_ID>] [-p / --prompt TEXT] [--prompt-file PATH] [--agent agy|opencode] [--concurrency N] [--force] [--dry-run]`（并发度建议 <= 3）。
+1. **输入**：`kp analyze [--input reviews.json | --id <MSG_ID>] [--min-score 7] [-p / --prompt TEXT] [--prompt-file PATH] [--agent agy|opencode] [--concurrency N] [--force] [--dry-run]`（要求必须至少指定 `--id` 或 `-i/--input`，并发度建议 <= 3）。
 2. **前置防重、内核路径与完整性校验**：
    - 校验 Linux 内核源码树路径配置（`kernel.path`，默认 `/code/linux`），若未配置或为空则抛出错误并拦截，严禁调用 Agent；
+   - 根据 Message-ID 自动从全局资产库 `data/patchsets/YYYY-MM/<clean_id>/` 定位补丁目录；若补丁未下载则报错提示；
    - 检查目标报告 `data/reports/YYYY-MM/<clean_id>.md` 是否已存在且非空。若已存在且未指定 `--force`，自动跳过该补丁集以避免重复消耗算力；
    - 自动校验待分析补丁集直读文件完整性（`meta.json`、`patches/`、`00-cover-letter.md`）。
 3. **自定义提示词与 Agent 驱动**：
@@ -137,13 +138,11 @@ data/
 │   └── YYYY-MM/
 │       ├── <clean_id_1>.md    # 各补丁集深度分析报告
 │       └── <clean_id_2>.md
-└── runs/                      # [会话执行日志]
+└── runs/                      # [会话执行日志 (kp fetch 审计快照)]
     └── <run_id>/
         ├── manifest.json      # 会话清单元数据 (RunManifest)
         ├── raw_metadata.json  # [阶段一] lei 返回的原始邮件元数据
-        ├── patchsets.json     # [阶段一] 聚合后的 Patchset 列表
-        ├── reviews.json       # [阶段二] 导入的 AI 打分与推荐结果
-        └── filtered_patchsets.json # [阶段二] 经筛选后待下载的 Patchset 列表
+        └── patchsets.json     # [阶段一] 聚合后的 Patchset 列表
 ```
 
 ---

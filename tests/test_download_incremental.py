@@ -20,7 +20,6 @@ def download_fixture(tmp_path: Path):
         b4=B4Config(timeout_seconds=120),
     )
     pipeline = DownloadPipeline(config)
-    run_id, run_dir = pipeline.session_manager.create_session_dir()
 
     patchsets = [
         Patchset(
@@ -40,20 +39,7 @@ def download_fixture(tmp_path: Path):
             patches=["[PATCH 1/1] net: fix sock"],
         ),
     ]
-    from kp.models import RunManifest
 
-    pipeline.session_manager.save_run(
-        run_dir=run_dir,
-        manifest=RunManifest(
-            run_id=run_id,
-            timestamp="2026-08-30T12:00:00Z",
-            query="q",
-            total_raw_messages=2,
-            total_patchsets=2,
-        ),
-        raw_msgs=[],
-        patchsets=patchsets,
-    )
     # Also record in DB
     for ps in patchsets:
         pipeline.session_manager.db.upsert_patchset(
@@ -65,11 +51,11 @@ def download_fixture(tmp_path: Path):
             )
         )
 
-    return pipeline, run_id, run_dir
+    return pipeline
 
 
 def test_download_pipeline_skip_when_up_to_date(download_fixture):
-    pipeline, run_id, run_dir = download_fixture
+    pipeline = download_fixture
 
     # Pre-set ps1 as downloaded at 2026-08-30T11:00:00Z (which is AFTER ps1.date 10:00:00Z)
     pipeline.session_manager.db.update_patchset_status(
@@ -81,7 +67,7 @@ def test_download_pipeline_skip_when_up_to_date(download_fixture):
     pipeline.b4_client.fetch_thread = MagicMock()
 
     # Run download for ps1
-    res = pipeline.run(run_id, target_ids=["ps1@kernel.org"])
+    res = pipeline.run(target_ids=["ps1@kernel.org"])
 
     # Should be skipped, no b4 call
     assert pipeline.b4_client.fetch_thread.call_count == 0
@@ -89,7 +75,7 @@ def test_download_pipeline_skip_when_up_to_date(download_fixture):
 
 
 def test_download_pipeline_force_download(download_fixture, tmp_path: Path):
-    pipeline, run_id, run_dir = download_fixture
+    pipeline = download_fixture
 
     pipeline.session_manager.db.update_patchset_status(
         id="ps1@kernel.org",
@@ -120,7 +106,7 @@ def test_download_pipeline_force_download(download_fixture, tmp_path: Path):
         )
     )
 
-    res = pipeline.run(run_id, target_ids=["ps1@kernel.org"], force=True)
+    res = pipeline.run(target_ids=["ps1@kernel.org"], force=True)
     assert pipeline.b4_client.fetch_thread.call_count == 1
     assert res.downloaded_count == 1
 
@@ -128,7 +114,7 @@ def test_download_pipeline_force_download(download_fixture, tmp_path: Path):
 def test_download_pipeline_analyzed_patchset_keeps_analyzed_status(
     download_fixture, tmp_path: Path
 ):
-    pipeline, run_id, run_dir = download_fixture
+    pipeline = download_fixture
 
     # Pre-set ps2 as analyzed with existing report
     pipeline.session_manager.db.update_patchset_status(
@@ -166,7 +152,7 @@ def test_download_pipeline_analyzed_patchset_keeps_analyzed_status(
         )
     )
 
-    res = pipeline.run(run_id, target_ids=["ps2@kernel.org"])
+    res = pipeline.run(target_ids=["ps2@kernel.org"])
     assert res.downloaded_count == 1
 
     # Check that status in DB remains ANALYZED!

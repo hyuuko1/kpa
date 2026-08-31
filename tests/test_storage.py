@@ -9,7 +9,6 @@ from kp.models import (
     RunManifest,
     RawMessage,
     Patchset,
-    PatchReview,
     ParsedPatchset,
     ParsedPatch,
     ParsedComment,
@@ -137,52 +136,9 @@ def test_session_manager_load_patchsets_not_found(tmp_path: Path):
         mgr.load_patchsets(empty_dir)
 
 
-def test_session_manager_save_reviews(tmp_path: Path):
-    config = StorageConfig(data_dir=str(tmp_path))
-    mgr = SessionManager(config)
-    run_dir = tmp_path / "runs" / "run_rev"
-    run_dir.mkdir(parents=True)
-
-    reviews = [
-        PatchReview(
-            id="msg1", title="title1", score=9, recommend=True, reason="Great patch"
-        ),
-        PatchReview(
-            id="msg2", title="title2", score=5, recommend=False, reason="Minor tweak"
-        ),
-    ]
-    filtered_patchsets = [
-        Patchset(
-            id="msg1",
-            title="title1",
-            author_name="Alice",
-            author_email="a@b.c",
-            patches=["[PATCH] title1"],
-        )
-    ]
-
-    mgr.save_reviews(run_dir, reviews, filtered_patchsets)
-
-    reviews_file = run_dir / "reviews.json"
-    filtered_file = run_dir / "filtered_patchsets.json"
-
-    assert reviews_file.exists()
-    assert filtered_file.exists()
-
-    loaded_reviews = json.loads(reviews_file.read_text(encoding="utf-8"))
-    assert len(loaded_reviews) == 2
-    assert loaded_reviews[0]["score"] == 9
-
-    loaded_filtered = json.loads(filtered_file.read_text(encoding="utf-8"))
-    assert len(loaded_filtered) == 1
-    assert loaded_filtered[0]["id"] == "msg1"
-
-
 def test_session_manager_save_parsed_patchset(tmp_path: Path):
     config = StorageConfig(data_dir=str(tmp_path))
     mgr = SessionManager(config)
-    run_dir = tmp_path / "runs" / "run_parsed"
-    run_dir.mkdir(parents=True)
 
     c1 = ParsedComment(
         author="Reviewer <rev@kernel.org>",
@@ -219,7 +175,7 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
     )
 
     saved_path = mgr.save_parsed_patchset(
-        run_dir, "patch1@domain.org", parsed, date_str="2026-08-30T10:00:00Z"
+        "patch1@domain.org", parsed, date_str="2026-08-30T10:00:00Z"
     )
 
     expected_path = (
@@ -250,75 +206,28 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
     assert "0001" in patch_files[0].name
 
 
-def test_session_manager_save_stage3_prompt(tmp_path: Path):
-    config = StorageConfig(data_dir=str(tmp_path))
-    mgr = SessionManager(config)
-    run_dir = tmp_path / "runs" / "run_prompt3"
-    run_dir.mkdir(parents=True)
-
-    prompt_text = "# Stage 3 Deep Analysis\n\nPlease analyze the patches."
-    saved_path = mgr.save_stage3_prompt(run_dir, prompt_text)
-
-    expected_path = run_dir / "stage3_prompt.md"
-    assert saved_path == expected_path
-    assert expected_path.exists()
-    assert expected_path.read_text(encoding="utf-8") == prompt_text
-
-
 def test_session_manager_reports_helpers(tmp_path: Path):
     sm = SessionManager(tmp_path)
-    run_id = "test-run-123"
-    run_dir = sm.create_session(run_id)
-
-    patchsets_data = [
-        {
-            "id": "patchset_1_msgid",
-            "title": "[PATCH] mm: fix bug",
-            "author_name": "Alice",
-            "author_email": "alice@kernel.org",
-            "date": "2026-08-30T10:00:00Z",
-            "patches": ["[PATCH] mm: fix bug"],
-        }
-    ]
-    (run_dir / "patchsets.json").write_text(
-        json.dumps(patchsets_data), encoding="utf-8"
-    )
 
     report_path = sm.get_report_path("patchset_1_msgid", "2026-08-30T10:00:00Z")
     assert report_path == tmp_path / "reports" / "2026-08" / "patchset_1_msgid.md"
 
-    assert sm.list_reports(run_id) == []
+    assert sm.list_reports() == []
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text("# Report", encoding="utf-8")
-    assert sm.list_reports(run_id) == [report_path]
+    assert sm.list_reports() == [report_path]
 
 
 def test_session_manager_get_downloaded_patchset_dirs(tmp_path: Path):
     sm = SessionManager(tmp_path)
-    run_id = "test-run-456"
-    run_dir = sm.create_session(run_id)
 
-    assert sm.get_downloaded_patchset_dirs(run_id) == []
-
-    patchsets_data = [
-        {
-            "id": "msg_1",
-            "title": "[PATCH] mm: fix bug",
-            "author_name": "Alice",
-            "author_email": "alice@kernel.org",
-            "date": "2026-08-30T10:00:00Z",
-            "patches": ["[PATCH] mm: fix bug"],
-        }
-    ]
-    (run_dir / "patchsets.json").write_text(
-        json.dumps(patchsets_data), encoding="utf-8"
-    )
+    assert sm.get_downloaded_patchset_dirs() == []
 
     p1_dir = tmp_path / "patchsets" / "2026-08" / "msg_1"
     p1_dir.mkdir(parents=True)
     (p1_dir / "meta.json").write_text("{}", encoding="utf-8")
 
-    dirs = sm.get_downloaded_patchset_dirs(run_id)
+    dirs = sm.get_downloaded_patchset_dirs()
     assert len(dirs) == 1
     assert dirs[0] == p1_dir
 
