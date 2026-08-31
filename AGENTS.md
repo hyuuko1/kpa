@@ -50,14 +50,16 @@
 
 ## 4. 开发与测试工作流
 
-1. **测试驱动开发 (TDD)**:
-   - 编写或修改代码前，必须先编写测试并见证其失败（RED），再实现最小代码使其通过（GREEN）。
+1. **测试按需执行原则**:
+   - **触发条件**: 仅在新增、修改代码（如 `src/`、`tests/`、配置与可执行脚本）时运行单元测试与 Lint；若仅修改纯文档、设计规范或 Markdown 说明（如 `docs/`、`*.md`），**严禁/无需运行单元测试**。
+2. **测试驱动开发 (TDD)**:
+   - 涉及代码开发或 Bug 修复时，必须先编写测试并见证其失败（RED），再实现最小代码使其通过（GREEN）。
    - 单元测试运行命令：`uv run pytest -v`
    - 单文件测试：`uv run pytest tests/test_xxx.py -v`
-2. **代码质量与 Lint**:
-   - 格式化与检查：`uv run ruff check` / `uv run ruff format`
+3. **代码质量与 Lint**:
+   - 代码改动时执行：`uv run ruff check` / `uv run ruff format`
    - 类型安全：使用 Python 3.10+ 类型注解，利用 Pydantic v2 进行运行时强校验。
-3. **高内聚低耦合**:
+4. **高内聚低耦合**:
    - 各类核心组件（如 `LoreClient`, `B4Client`, `MboxParser`, `SessionManager`）保持清晰的依赖注入接口，确保单元测试可独立 Mock 验证。
 
 ---
