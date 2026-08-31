@@ -1,17 +1,21 @@
-import pytest
 from kp.models import RawMessage
 from kp.core.aggregator import PatchsetAggregator
+
 
 def test_parse_subject_patterns():
     aggregator = PatchsetAggregator()
     # Cover letter
-    is_cov, idx, tot = aggregator.parse_subject_meta("[PATCH 0/4] mm/damon: improve monitoring")
+    is_cov, idx, tot = aggregator.parse_subject_meta(
+        "[PATCH 0/4] mm/damon: improve monitoring"
+    )
     assert is_cov is True
     assert idx == 0
     assert tot == 4
 
     # Subpatch
-    is_cov, idx, tot = aggregator.parse_subject_meta("[PATCH v2 3/4] mm/damon: add tests")
+    is_cov, idx, tot = aggregator.parse_subject_meta(
+        "[PATCH v2 3/4] mm/damon: add tests"
+    )
     assert is_cov is False
     assert idx == 3
     assert tot == 4
@@ -53,6 +57,7 @@ def test_parse_subject_patterns():
     assert tot == 2
     assert title == "[PATCH 1/2] mm/test: part 1"
 
+
 def test_aggregate_series_with_cover_letter():
     aggregator = PatchsetAggregator()
     raw_msgs = [
@@ -61,21 +66,21 @@ def test_aggregate_series_with_cover_letter():
             s="[PATCH 0/2] mm/test: series cover",
             f=[["Dev", "dev@kernel.org"]],
             dt="2026-08-30T10:00:00Z",
-            refs=[]
+            refs=[],
         ),
         RawMessage(
             m="patch1@1",
             s="[PATCH 1/2] mm/test: part 1",
             f=[["Dev", "dev@kernel.org"]],
             dt="2026-08-30T10:01:00Z",
-            refs=["cover@1"]
+            refs=["cover@1"],
         ),
         RawMessage(
             m="patch2@1",
             s="[PATCH 2/2] mm/test: part 2",
             f=[["Dev", "dev@kernel.org"]],
             dt="2026-08-30T10:02:00Z",
-            refs=["cover@1"]
+            refs=["cover@1"],
         ),
     ]
 
@@ -91,6 +96,7 @@ def test_aggregate_series_with_cover_letter():
     assert ps.patches[0] == "[PATCH 1/2] mm/test: part 1"
     assert ps.patches[1] == "[PATCH 2/2] mm/test: part 2"
 
+
 def test_aggregate_standalone_patches():
     aggregator = PatchsetAggregator()
     raw_msgs = [
@@ -99,7 +105,7 @@ def test_aggregate_standalone_patches():
             s="[PATCH] mm/slab: fix typo",
             f=[["Alice", "alice@kernel.org"]],
             dt="2026-08-30T11:00:00Z",
-            refs=[]
+            refs=[],
         )
     ]
     patchsets = aggregator.aggregate(raw_msgs)
@@ -113,6 +119,7 @@ def test_aggregate_standalone_patches():
     assert len(ps.patches) == 1
     assert ps.patches[0] == "[PATCH] mm/slab: fix typo"
 
+
 def test_aggregate_series_without_cover_letter_out_of_order():
     aggregator = PatchsetAggregator()
     # Out of order delivery: patch 2 first, then patch 1
@@ -122,14 +129,14 @@ def test_aggregate_series_without_cover_letter_out_of_order():
             s="[PATCH 2/2] mm/test: part 2",
             f=[["Bob", "bob@kernel.org"]],
             dt="2026-08-30T12:02:00Z",
-            refs=["patch1@1"]
+            refs=["patch1@1"],
         ),
         RawMessage(
             m="patch1@1",
             s="[PATCH 1/2] mm/test: part 1",
             f=[["Bob", "bob@kernel.org"]],
             dt="2026-08-30T12:01:00Z",
-            refs=[]
+            refs=[],
         ),
     ]
     patchsets = aggregator.aggregate(raw_msgs)
@@ -144,9 +151,11 @@ def test_aggregate_series_without_cover_letter_out_of_order():
     assert ps.patches[0] == "[PATCH 1/2] mm/test: part 1"
     assert ps.patches[1] == "[PATCH 2/2] mm/test: part 2"
 
+
 def test_aggregate_empty_messages():
     aggregator = PatchsetAggregator()
     assert aggregator.aggregate([]) == []
+
 
 def test_aggregate_sorting_by_date():
     aggregator = PatchsetAggregator()
@@ -156,21 +165,21 @@ def test_aggregate_sorting_by_date():
             s="[PATCH] old patch",
             f=[["Dev", "dev@kernel.org"]],
             dt="2026-08-30T09:00:00Z",
-            refs=[]
+            refs=[],
         ),
         RawMessage(
             m="new@1",
             s="[PATCH] new patch",
             f=[["Dev", "dev@kernel.org"]],
             dt="2026-08-30T14:00:00Z",
-            refs=[]
+            refs=[],
         ),
         RawMessage(
             m="mid@1",
             s="[PATCH] mid patch",
             f=[["Dev", "dev@kernel.org"]],
             dt="2026-08-30T11:00:00Z",
-            refs=[]
+            refs=[],
         ),
     ]
     patchsets = aggregator.aggregate(raw_msgs)
@@ -178,6 +187,7 @@ def test_aggregate_sorting_by_date():
     assert patchsets[0].id == "new@1"
     assert patchsets[1].id == "mid@1"
     assert patchsets[2].id == "old@1"
+
 
 def test_aggregate_chained_threading():
     aggregator = PatchsetAggregator()
@@ -187,28 +197,28 @@ def test_aggregate_chained_threading():
             s="[PATCH 0/3] chained series",
             f=[["Carol", "carol@kernel.org"]],
             dt="2026-08-30T08:00:00Z",
-            refs=[]
+            refs=[],
         ),
         RawMessage(
             m="patch1@chain",
             s="[PATCH 1/3] part 1",
             f=[["Carol", "carol@kernel.org"]],
             dt="2026-08-30T08:01:00Z",
-            refs=["cover@chain"]
+            refs=["cover@chain"],
         ),
         RawMessage(
             m="patch2@chain",
             s="[PATCH 2/3] part 2",
             f=[["Carol", "carol@kernel.org"]],
             dt="2026-08-30T08:02:00Z",
-            refs=["patch1@chain"]
+            refs=["patch1@chain"],
         ),
         RawMessage(
             m="patch3@chain",
             s="[PATCH 3/3] part 3",
             f=[["Carol", "carol@kernel.org"]],
             dt="2026-08-30T08:03:00Z",
-            refs=["patch2@chain"]
+            refs=["patch2@chain"],
         ),
     ]
     patchsets = aggregator.aggregate(raw_msgs)
@@ -222,6 +232,7 @@ def test_aggregate_chained_threading():
         "[PATCH 3/3] part 3",
     ]
 
+
 def test_aggregate_filter_replies():
     aggregator = PatchsetAggregator()
     raw_msgs = [
@@ -230,29 +241,29 @@ def test_aggregate_filter_replies():
             s="[PATCH 1/2] mm: feature part 1",
             f=[["Author", "author@kernel.org"]],
             dt="2026-08-30T10:00:00Z",
-            refs=[]
+            refs=[],
         ),
         RawMessage(
             m="reply1@test",
             s="Re: [PATCH 1/2] mm: feature part 1",
             f=[["Reviewer", "reviewer@kernel.org"]],
             dt="2026-08-30T10:05:00Z",
-            refs=["patch1@test"]
+            refs=["patch1@test"],
         ),
         RawMessage(
             m="patch2@test",
             s="[PATCH 2/2] mm: feature part 2",
             f=[["Author", "author@kernel.org"]],
             dt="2026-08-30T10:01:00Z",
-            refs=["patch1@test"]
+            refs=["patch1@test"],
         ),
         RawMessage(
             m="standalone_reply@test",
             s="Re: [PATCH] some older patch",
             f=[["Reviewer2", "reviewer2@kernel.org"]],
             dt="2026-08-30T10:10:00Z",
-            refs=[]
-        )
+            refs=[],
+        ),
     ]
     patchsets = aggregator.aggregate(raw_msgs)
     # The standalone reply should be discarded, only the valid patchset remains
@@ -265,15 +276,13 @@ def test_aggregate_filter_replies():
         "[PATCH 2/2] mm: feature part 2",
     ]
 
+
 def test_aggregate_author_fallbacks():
     aggregator = PatchsetAggregator()
     # Missing/empty from field
     raw_msgs = [
         RawMessage(
-            m="msg1@test",
-            s="[PATCH] test fallback",
-            f=[],
-            dt="2026-08-30T10:00:00Z"
+            m="msg1@test", s="[PATCH] test fallback", f=[], dt="2026-08-30T10:00:00Z"
         )
     ]
     patchsets = aggregator.aggregate(raw_msgs)
@@ -287,13 +296,14 @@ def test_aggregate_author_fallbacks():
             m="msg2@test",
             s="[PATCH] test none from",
             f=[[None, None]],
-            dt="2026-08-30T10:00:00Z"
+            dt="2026-08-30T10:00:00Z",
         )
     ]
     patchsets2 = aggregator.aggregate(raw_msgs_none)
     assert len(patchsets2) == 1
     assert patchsets2[0].author_name == "Unknown"
     assert patchsets2[0].author_email == "unknown@kernel.org"
+
 
 def test_aggregate_partial_series():
     aggregator = PatchsetAggregator()
@@ -304,7 +314,7 @@ def test_aggregate_partial_series():
             s="[PATCH 2/4] part 2",
             f=[["Author", "author@kernel.org"]],
             dt="2026-08-30T10:00:00Z",
-            refs=[]
+            refs=[],
         )
     ]
     patchsets = aggregator.aggregate(raw_msgs)
@@ -312,4 +322,3 @@ def test_aggregate_partial_series():
     ps = patchsets[0]
     assert len(ps.patches) == 1
     assert ps.patches[0] == "[PATCH 2/4] part 2"
-

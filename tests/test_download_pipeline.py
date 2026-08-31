@@ -45,7 +45,11 @@ def mock_env(tmp_path):
             title="[PATCH 0/3] sched: revamp balancer",
             author_name="Charlie",
             author_email="charlie@example.com",
-            patches=["[PATCH 1/3] sched: step 1", "[PATCH 2/3] sched: step 2", "[PATCH 3/3] sched: step 3"],
+            patches=[
+                "[PATCH 1/3] sched: step 1",
+                "[PATCH 2/3] sched: step 2",
+                "[PATCH 3/3] sched: step 3",
+            ],
         ),
     ]
     patchsets_file = run_dir / "patchsets.json"
@@ -151,7 +155,9 @@ def test_download_pipeline_by_reviews(mock_env, tmp_path):
     assert (run_dir / "filtered_patchsets.json").exists()
 
     # 检查 filtered_patchsets 内容
-    filtered = json.loads((run_dir / "filtered_patchsets.json").read_text(encoding="utf-8"))
+    filtered = json.loads(
+        (run_dir / "filtered_patchsets.json").read_text(encoding="utf-8")
+    )
     filtered_ids = [item["id"] for item in filtered]
     assert "patch1@example.com" in filtered_ids
     assert "patch3@example.com" in filtered_ids

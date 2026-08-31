@@ -20,7 +20,9 @@ def test_cli_fetch_success(tmp_path: Path):
         )
     ]
     with patch("kp.adapters.lore.LoreClient.query", return_value=fake_raw):
-        result = runner.invoke(main, ["fetch", "--query", "l:linux-mm AND d:2.hours.ago.."])
+        result = runner.invoke(
+            main, ["fetch", "--query", "l:linux-mm AND d:2.hours.ago.."]
+        )
         assert result.exit_code == 0
         assert "抓取完成" in result.output
         assert "kernel-patch-analyzer" in result.output
@@ -42,19 +44,28 @@ def test_cli_fetch_safety_violation():
     assert "安全限制" in result2.output
 
 
-
 def test_cli_fetch_lore_error():
     runner = CliRunner()
-    with patch("kp.adapters.lore.LoreClient.query", side_effect=LoreExecutionError("lei execution failed")):
-        result = runner.invoke(main, ["fetch", "--query", "l:linux-mm AND d:1.hours.ago.."])
+    with patch(
+        "kp.adapters.lore.LoreClient.query",
+        side_effect=LoreExecutionError("lei execution failed"),
+    ):
+        result = runner.invoke(
+            main, ["fetch", "--query", "l:linux-mm AND d:1.hours.ago.."]
+        )
         assert result.exit_code == 1
         assert "lei execution failed" in result.output
 
 
 def test_cli_fetch_unexpected_error():
     runner = CliRunner()
-    with patch("kp.core.pipeline.FetchPipeline.run", side_effect=RuntimeError("unexpected disk error")):
-        result = runner.invoke(main, ["fetch", "--query", "l:linux-mm AND d:1.hours.ago.."])
+    with patch(
+        "kp.core.pipeline.FetchPipeline.run",
+        side_effect=RuntimeError("unexpected disk error"),
+    ):
+        result = runner.invoke(
+            main, ["fetch", "--query", "l:linux-mm AND d:1.hours.ago.."]
+        )
         assert result.exit_code == 1
         assert "未知错误: unexpected disk error" in result.output
 
@@ -90,7 +101,13 @@ data_dir = "{custom_data_dir.as_posix()}"
     with patch("kp.adapters.lore.LoreClient.query", return_value=fake_raw):
         result = runner.invoke(
             main,
-            ["-c", str(config_file), "fetch", "-q", "l:linux-mm AND d:30.minutes.ago.."],
+            [
+                "-c",
+                str(config_file),
+                "fetch",
+                "-q",
+                "l:linux-mm AND d:30.minutes.ago..",
+            ],
         )
         assert result.exit_code == 0
         assert "抓取完成" in result.output
@@ -130,7 +147,9 @@ def test_cli_download_by_id_success(tmp_path: Path):
         run_dir=tmp_path,
         downloaded_count=2,
     )
-    with patch("kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result) as mock_run:
+    with patch(
+        "kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result
+    ) as mock_run:
         result = runner.invoke(
             main,
             [
@@ -162,7 +181,9 @@ def test_cli_download_by_input_file_success(tmp_path: Path):
     from kp.core.download_pipeline import DownloadResult
 
     reviews_file = tmp_path / "reviews.json"
-    reviews_content = '[{"id": "msg1@test", "score": 90, "recommend": true, "summary": "good"}]'
+    reviews_content = (
+        '[{"id": "msg1@test", "score": 90, "recommend": true, "summary": "good"}]'
+    )
     reviews_file.write_text(reviews_content, encoding="utf-8")
 
     runner = CliRunner()
@@ -171,7 +192,9 @@ def test_cli_download_by_input_file_success(tmp_path: Path):
         run_dir=tmp_path,
         downloaded_count=1,
     )
-    with patch("kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result) as mock_run:
+    with patch(
+        "kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result
+    ) as mock_run:
         result = runner.invoke(
             main,
             [
@@ -196,7 +219,9 @@ def test_cli_download_by_input_file_success(tmp_path: Path):
 def test_cli_download_by_input_stdin_success(tmp_path: Path):
     from kp.core.download_pipeline import DownloadResult
 
-    stdin_data = '[{"id": "msg1@test", "score": 95, "recommend": true, "summary": "excellent"}]'
+    stdin_data = (
+        '[{"id": "msg1@test", "score": 95, "recommend": true, "summary": "excellent"}]'
+    )
 
     runner = CliRunner()
     fake_result = DownloadResult(
@@ -204,7 +229,9 @@ def test_cli_download_by_input_stdin_success(tmp_path: Path):
         run_dir=tmp_path,
         downloaded_count=1,
     )
-    with patch("kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result) as mock_run:
+    with patch(
+        "kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result
+    ) as mock_run:
         result = runner.invoke(
             main,
             [
@@ -348,7 +375,9 @@ def test_cli_analyze_dry_run_success(tmp_path: Path):
         success_count=0,
         failed_count=0,
     )
-    with patch("kp.core.analyze_pipeline.AnalyzePipeline.run", return_value=fake_res) as mock_run:
+    with patch(
+        "kp.core.analyze_pipeline.AnalyzePipeline.run", return_value=fake_res
+    ) as mock_run:
         result = runner.invoke(
             main,
             ["analyze", "--run-id", "20260830_120000_abc123", "--dry-run"],
@@ -384,7 +413,9 @@ def test_cli_analyze_success(tmp_path: Path):
         success_count=1,
         failed_count=0,
     )
-    with patch("kp.core.analyze_pipeline.AnalyzePipeline.run", return_value=fake_res) as mock_run:
+    with patch(
+        "kp.core.analyze_pipeline.AnalyzePipeline.run", return_value=fake_res
+    ) as mock_run:
         result = runner.invoke(
             main,
             [
@@ -494,5 +525,3 @@ def test_cli_analyze_unexpected_error():
         result = runner.invoke(main, ["analyze", "--run-id", "20260830_120000_abc123"])
         assert result.exit_code == 1
         assert "未知错误: something unexpected" in result.output
-
-

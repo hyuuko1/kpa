@@ -100,7 +100,11 @@ def download_cmd(
 ) -> None:
     """阶段二：下载选定补丁完整邮件线索、结构化解析并生成直读文件"""
     if not target_ids and not input_file:
-        click.secho("[错误] 请至少指定 --id 或 --input 参数以选择要下载的补丁集", fg="red", err=True)
+        click.secho(
+            "[错误] 请至少指定 --id 或 --input 参数以选择要下载的补丁集",
+            fg="red",
+            err=True,
+        )
         sys.exit(1)
 
     reviews_content: str | None = None
@@ -110,7 +114,9 @@ def download_cmd(
         else:
             p = Path(input_file)
             if not p.exists():
-                click.secho(f"[错误] 评审结果文件不存在: {input_file}", fg="red", err=True)
+                click.secho(
+                    f"[错误] 评审结果文件不存在: {input_file}", fg="red", err=True
+                )
                 sys.exit(1)
             reviews_content = p.read_text(encoding="utf-8")
 
@@ -209,9 +215,14 @@ def analyze_cmd(
             click.echo(f"    - 待分析 Patchset 总数: {result.total_count}")
             for item in result.analyses:
                 if item.status == "skipped":
-                    click.echo(f"    - [{item.sanitized_id}] 就绪 -> 目标报告: {item.report_path}")
+                    click.echo(
+                        f"    - [{item.sanitized_id}] 就绪 -> 目标报告: {item.report_path}"
+                    )
                 else:
-                    click.secho(f"    - [{item.sanitized_id}] 异常: {item.error_message}", fg="yellow")
+                    click.secho(
+                        f"    - [{item.sanitized_id}] 异常: {item.error_message}",
+                        fg="yellow",
+                    )
         else:
             click.secho("[✓] 深度技术分析完成！", fg="green", bold=True)
             click.echo(f"    - 运行 ID: {result.run_id}")
@@ -222,9 +233,14 @@ def analyze_cmd(
 
             for item in result.analyses:
                 if item.status == "success":
-                    click.echo(f"    - [{item.sanitized_id}] ({item.duration_seconds}s) 报告: {item.report_path}")
+                    click.echo(
+                        f"    - [{item.sanitized_id}] ({item.duration_seconds}s) 报告: {item.report_path}"
+                    )
                 else:
-                    click.secho(f"    - [{item.sanitized_id}] 失败: {item.error_message}", fg="red")
+                    click.secho(
+                        f"    - [{item.sanitized_id}] 失败: {item.error_message}",
+                        fg="red",
+                    )
     except FileNotFoundError as e:
         click.secho(f"[错误] 会话或文件不存在: {e}", fg="red", err=True)
         sys.exit(1)
@@ -241,5 +257,3 @@ def analyze_cmd(
 
 if __name__ == "__main__":
     main()
-
-

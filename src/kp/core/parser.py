@@ -115,7 +115,9 @@ def extract_body(msg: email.message.Message) -> str:
         return ""
 
 
-def parse_commit_message_and_trailers(text: str) -> Tuple[str, List[str], Optional[str], str]:
+def parse_commit_message_and_trailers(
+    text: str,
+) -> Tuple[str, List[str], Optional[str], str]:
     """解析单个 Patch 的正文，拆分为 commit_message、trailers、diffstat 和 diff"""
     diff_match = DIFF_START_RE.search(text)
     if diff_match:
@@ -141,7 +143,9 @@ def parse_commit_message_and_trailers(text: str) -> Tuple[str, List[str], Option
     # 提取 diffstat
     diffstat_lines = []
     for line in notes_and_diffstat_part.splitlines():
-        if re.match(r"^\s+.*\s+\|\s+.*", line) or re.match(r"^\s*\d+\s+files?\s+changed.*", line):
+        if re.match(r"^\s+.*\s+\|\s+.*", line) or re.match(
+            r"^\s*\d+\s+files?\s+changed.*", line
+        ):
             diffstat_lines.append(line)
     diffstat = "\n".join(diffstat_lines).strip() if diffstat_lines else None
 
@@ -189,7 +193,9 @@ def parse_cover_letter_body_and_diffstat(text: str) -> Tuple[str, Optional[str]]
     in_diffstat = False
 
     for line in lines:
-        if re.match(r"^\s+.*\s+\|\s+.*", line) or re.match(r"^\s*\d+\s+files?\s+changed.*", line):
+        if re.match(r"^\s+.*\s+\|\s+.*", line) or re.match(
+            r"^\s*\d+\s+files?\s+changed.*", line
+        ):
             diffstat_lines.append(line)
             in_diffstat = True
         elif in_diffstat and not line.strip():
@@ -208,7 +214,9 @@ class MboxParser:
     def __init__(self) -> None:
         self.aggregator = PatchsetAggregator()
 
-    def parse(self, mbox_path: Path | str, patchset_id: str, title: str = "") -> ParsedPatchset:
+    def parse(
+        self, mbox_path: Path | str, patchset_id: str, title: str = ""
+    ) -> ParsedPatchset:
         """解析指定 mbox 文件，提取 Cover Letter、Patches 与嵌套评论树"""
         mbox_path = Path(mbox_path)
         if not mbox_path.exists() or mbox_path.stat().st_size == 0:
@@ -229,7 +237,10 @@ class MboxParser:
 
         for msg in mbox:
             subject = decode_header_str(msg.get("Subject"))
-            msg_id = clean_msgid(msg.get("Message-ID")) or f"msg-{len(patches)+len(raw_comments)}"
+            msg_id = (
+                clean_msgid(msg.get("Message-ID"))
+                or f"msg-{len(patches) + len(raw_comments)}"
+            )
             in_reply_to = clean_msgid(msg.get("In-Reply-To"))
             references = extract_references(msg)
             author = decode_header_str(msg.get("From"))
@@ -263,7 +274,9 @@ class MboxParser:
                     diffstat=cov_diffstat,
                 )
             elif has_diff or "[PATCH" in subject.upper():
-                commit_msg, trailers, diffstat, diff = parse_commit_message_and_trailers(body)
+                commit_msg, trailers, diffstat, diff = (
+                    parse_commit_message_and_trailers(body)
+                )
                 patches.append(
                     ParsedPatch(
                         index=idx,
@@ -342,7 +355,11 @@ class MboxParser:
             node = comment_nodes[msg_id]
             parent_id = comment_parent_map[msg_id]
 
-            if parent_id and parent_id in comment_nodes and not is_ancestor(msg_id, parent_id):
+            if (
+                parent_id
+                and parent_id in comment_nodes
+                and not is_ancestor(msg_id, parent_id)
+            ):
                 comment_nodes[parent_id].replies.append(node)
             elif parent_id and parent_id in patch_map:
                 patch_map[parent_id].comments.append(node)

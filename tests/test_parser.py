@@ -160,7 +160,9 @@ def test_parse_empty_or_nonexistent_mbox(tmp_path: Path):
     mbox_file.write_text("", encoding="utf-8")
 
     parser = MboxParser()
-    parsed = parser.parse(mbox_file, patchset_id="empty@example.com", title="Empty Title")
+    parsed = parser.parse(
+        mbox_file, patchset_id="empty@example.com", title="Empty Title"
+    )
 
     assert parsed.id == "empty@example.com"
     assert parsed.title == "Empty Title"
@@ -170,7 +172,9 @@ def test_parse_empty_or_nonexistent_mbox(tmp_path: Path):
     assert parsed.general_comments == []
 
     nonexistent = tmp_path / "does_not_exist.mbx"
-    parsed_nonexistent = parser.parse(nonexistent, patchset_id="nonexistent@example.com")
+    parsed_nonexistent = parser.parse(
+        nonexistent, patchset_id="nonexistent@example.com"
+    )
     assert parsed_nonexistent.id == "nonexistent@example.com"
     assert parsed_nonexistent.total_patches == 0
 
@@ -352,7 +356,9 @@ Also consider socket shutdown path.
     assert "commentC@example.com" in reply_ids
 
     # commentAlice1 has child commentB
-    alice_reply = next(r for r in cA.replies if r.message_id == "commentAlice1@example.com")
+    alice_reply = next(
+        r for r in cA.replies if r.message_id == "commentAlice1@example.com"
+    )
     assert len(alice_reply.replies) == 1
     assert alice_reply.replies[0].message_id == "commentB@example.com"
 

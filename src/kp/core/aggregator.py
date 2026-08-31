@@ -49,7 +49,7 @@ class PatchsetAggregator:
             if frac_match:
                 idx = int(frac_match.group(1))
                 tot = int(frac_match.group(2))
-                is_cover = (idx == 0)
+                is_cover = idx == 0
                 return (is_cover, idx, tot)
             return (False, 1, 1)
 
@@ -80,13 +80,12 @@ class PatchsetAggregator:
 
         # 1. 初始化并查集并合并引用关系
         uf = UnionFind()
-        msg_map: Dict[str, RawMessage] = {m.m: m for m in messages if m.m}
 
         for msg in messages:
             if not msg.m:
                 continue
             uf.find(msg.m)
-            for ref in (msg.refs or []):
+            for ref in msg.refs or []:
                 if ref:
                     uf.union(msg.m, ref)
 
@@ -153,4 +152,3 @@ class PatchsetAggregator:
         # 4. 按提交日期降序排列
         result.sort(key=lambda ps: ps.date or "", reverse=True)
         return result
-

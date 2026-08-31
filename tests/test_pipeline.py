@@ -32,7 +32,9 @@ def test_fetch_pipeline_run(tmp_path: Path):
         assert (result.run_dir / "manifest.json").exists()
 
         # Verify manifest content
-        manifest_data = json.loads((result.run_dir / "manifest.json").read_text(encoding="utf-8"))
+        manifest_data = json.loads(
+            (result.run_dir / "manifest.json").read_text(encoding="utf-8")
+        )
         assert manifest_data["run_id"] == result.run_id
         assert manifest_data["query"] == "l:linux-mm AND d:1.hours.ago.."
         assert manifest_data["total_raw_messages"] == 1
@@ -91,13 +93,17 @@ def test_fetch_pipeline_multi_patchset(tmp_path: Path):
         assert result.raw_count == 4
         assert result.patchset_count == 2
 
-        patchsets_data = json.loads((result.run_dir / "patchsets.json").read_text(encoding="utf-8"))
+        patchsets_data = json.loads(
+            (result.run_dir / "patchsets.json").read_text(encoding="utf-8")
+        )
         assert len(patchsets_data) == 2
         # Check first patchset has string array of patches
         sched_ps = [p for p in patchsets_data if "sched" in p["title"]][0]
         assert sched_ps["patches"] == ["[PATCH] sched: fix bug"]
         mm_ps = [p for p in patchsets_data if "intro" in p["title"]][0]
-        assert mm_ps["patches"] == ["[PATCH 1/2] mm: patch 1", "[PATCH 2/2] mm: patch 2"]
+        assert mm_ps["patches"] == [
+            "[PATCH 1/2] mm: patch 1",
+            "[PATCH 2/2] mm: patch 2",
+        ]
         assert "total_patches" not in mm_ps
         assert "is_cover_letter" not in mm_ps
-

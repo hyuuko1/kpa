@@ -66,6 +66,7 @@
 - **系统设计与架构全景**: [`docs/design.md`](docs/design.md)
 - **阶段一设计规范**: [`docs/superpowers/specs/2026-08-30-patch-analyzer-stage1-design.md`](docs/superpowers/specs/2026-08-30-patch-analyzer-stage1-design.md)
 - **阶段二设计规范**: [`docs/superpowers/specs/2026-08-30-patch-analyzer-stage2-design.md`](docs/superpowers/specs/2026-08-30-patch-analyzer-stage2-design.md)
+- **阶段三设计规范**: [`docs/superpowers/specs/2026-08-31-patch-analyzer-stage3-design.md`](docs/superpowers/specs/2026-08-31-patch-analyzer-stage3-design.md)
 - **数据模型定义**: [`src/kp/models.py`](src/kp/models.py)
 - **CLI 命令定义**: [`src/kp/cli.py`](src/kp/cli.py)
 - **会话与持久化管理**: [`src/kp/storage/session.py`](src/kp/storage/session.py)

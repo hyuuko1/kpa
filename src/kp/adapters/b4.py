@@ -10,11 +10,13 @@ from kp.config import B4Config
 
 class B4NotFoundError(Exception):
     """系统环境中未找到 b4 工具"""
+
     pass
 
 
 class B4ExecutionError(Exception):
     """调用 b4 执行失败"""
+
     pass
 
 
@@ -92,8 +94,6 @@ class B4Client:
             )
 
         if not target_file.exists():
-            raise B4ExecutionError(
-                f"b4 mbox failed: 未生成目标文件 {target_file}"
-            )
+            raise B4ExecutionError(f"b4 mbox failed: 未生成目标文件 {target_file}")
 
         return target_file

@@ -30,14 +30,16 @@ def render_cover_letter_md(cover: ParsedCoverLetter) -> str:
         "",
     ]
     if cover.diffstat:
-        lines.extend([
-            "## Diffstat",
-            "",
-            "```text",
-            cover.diffstat.strip(),
-            "```",
-            "",
-        ])
+        lines.extend(
+            [
+                "## Diffstat",
+                "",
+                "```text",
+                cover.diffstat.strip(),
+                "```",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -74,26 +76,32 @@ def render_discussions_md(patchset: ParsedPatchset) -> str:
     ]
 
     if has_general:
-        lines.extend([
-            "## 系列总体讨论 (General / Cover Letter Discussions)",
-            "",
-        ])
+        lines.extend(
+            [
+                "## 系列总体讨论 (General / Cover Letter Discussions)",
+                "",
+            ]
+        )
         for c in patchset.general_comments:
             lines.extend(_render_comment_tree(c, level=1))
             lines.append("")
 
     if has_patch_comments:
-        lines.extend([
-            "## 各 Patch 内联审阅与讨论 (Patch Discussions)",
-            "",
-        ])
+        lines.extend(
+            [
+                "## 各 Patch 内联审阅与讨论 (Patch Discussions)",
+                "",
+            ]
+        )
         for patch in patchset.patches:
             if not patch.comments:
                 continue
-            lines.extend([
-                f"### [PATCH {patch.index}/{patch.total}] {patch.subject}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"### [PATCH {patch.index}/{patch.total}] {patch.subject}",
+                    "",
+                ]
+            )
             for c in patch.comments:
                 lines.extend(_render_comment_tree(c, level=1))
                 lines.append("")

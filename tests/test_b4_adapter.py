@@ -16,7 +16,10 @@ def test_sanitize_id():
 
 
 def test_sanitize_id_special_chars():
-    assert B4Client.sanitize_id("20260830/patch:123@domain.com") == "20260830_patch_123_domain.com"
+    assert (
+        B4Client.sanitize_id("20260830/patch:123@domain.com")
+        == "20260830_patch_123_domain.com"
+    )
     assert B4Client.sanitize_id("<foo?bar*baz@test.org>") == "foo_bar_baz_test.org"
     assert B4Client.sanitize_id("   <spaces-in-id@org>  ") == "spaces-in-id_org"
 
@@ -60,7 +63,9 @@ def test_fetch_thread_success(mock_run, mock_which, tmp_path):
 @patch("shutil.which", return_value="/usr/bin/b4")
 @patch("subprocess.run")
 def test_fetch_thread_execution_failure(mock_run, mock_which, tmp_path):
-    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error: msgid not found")
+    mock_run.return_value = MagicMock(
+        returncode=1, stdout="", stderr="Error: msgid not found"
+    )
     client = B4Client(B4Config())
     with pytest.raises(B4ExecutionError) as exc_info:
         client.fetch_thread("notfound@msgid", tmp_path)

@@ -12,11 +12,13 @@ from kp.models import RawMessage
 
 class SafetyValidationError(Exception):
     """查询安全校验失败"""
+
     pass
 
 
 class LoreExecutionError(Exception):
     """调用 lei 执行失败"""
+
     pass
 
 
@@ -42,7 +44,11 @@ class SafetyValidator:
 
     def _validate_date_expr(self, expr: str) -> None:
         # 1. 相对时间表达解析 (e.g. 2.hours.ago, 90.minutes.ago, 1.day.ago)
-        rel_match = re.match(r"^(\d+)\.(minutes?|hours?|days?|weeks?|months?|years?)\.ago$", expr, re.IGNORECASE)
+        rel_match = re.match(
+            r"^(\d+)\.(minutes?|hours?|days?|weeks?|months?|years?)\.ago$",
+            expr,
+            re.IGNORECASE,
+        )
         if rel_match:
             val = int(rel_match.group(1))
             unit = rel_match.group(2).lower()
@@ -96,7 +102,9 @@ class LoreClient:
         self.validator.validate_query(query_str)
 
         if not shutil.which("lei"):
-            raise LoreExecutionError("系统环境中未找到 lei 工具，请确保已正确安装 public-inbox/lei")
+            raise LoreExecutionError(
+                "系统环境中未找到 lei 工具，请确保已正确安装 public-inbox/lei"
+            )
 
         cmd = [
             "lei",
@@ -118,12 +126,16 @@ class LoreClient:
                 check=False,
             )
         except subprocess.TimeoutExpired as e:
-            raise LoreExecutionError(f"lei 查询超时 ({self.lore_config.timeout_seconds}s)") from e
+            raise LoreExecutionError(
+                f"lei 查询超时 ({self.lore_config.timeout_seconds}s)"
+            ) from e
         except Exception as e:
             raise LoreExecutionError(f"执行 lei 命令失败: {e}") from e
 
         if res.returncode != 0:
-            raise LoreExecutionError(f"lei 查询失败 (code {res.returncode}): {res.stderr.strip()}")
+            raise LoreExecutionError(
+                f"lei 查询失败 (code {res.returncode}): {res.stderr.strip()}"
+            )
 
         stdout = res.stdout.strip()
         if not stdout:
@@ -134,7 +146,11 @@ class LoreClient:
             if not isinstance(data, list):
                 return []
             # 过滤掉尾部可能的 null 项
-            valid_items = [item for item in data if isinstance(item, dict) and "m" in item and "s" in item]
+            valid_items = [
+                item
+                for item in data
+                if isinstance(item, dict) and "m" in item and "s" in item
+            ]
             return [RawMessage.model_validate(item) for item in valid_items]
         except Exception as e:
             raise LoreExecutionError(f"解析 lei 返回的 JSON 失败: {e}") from e

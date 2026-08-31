@@ -9,7 +9,9 @@ from kp.core.formatters import (
 
 
 def test_sanitize_filename():
-    assert sanitize_filename("[PATCH 1/3] mm/zswap: fix bug") == "PATCH_13_mmzswap_fix_bug"
+    assert (
+        sanitize_filename("[PATCH 1/3] mm/zswap: fix bug") == "PATCH_13_mmzswap_fix_bug"
+    )
     assert sanitize_filename("") == "patch"
 
 
@@ -79,7 +81,10 @@ def test_render_patch_file():
         date="2026-08-30 12:00:00",
         message_id="p1",
         commit_message="Fix lock issue\n\nDetailed explanation here.",
-        trailers=["Signed-off-by: Alice <alice@kernel.org>", "Reviewed-by: Bob <bob@kernel.org>"],
+        trailers=[
+            "Signed-off-by: Alice <alice@kernel.org>",
+            "Reviewed-by: Bob <bob@kernel.org>",
+        ],
         diffstat="mm/file.c | 2 +-\n 1 file changed",
         diff="--- a/mm/file.c\n+++ b/mm/file.c\n@@ -1 +1 @@\n-old\n+new",
     )

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class DownloadResult(BaseModel):
     """阶段二下载与解析流水线执行结果"""
+
     run_id: str
     run_dir: Path
     downloaded_count: int
@@ -54,9 +55,17 @@ class DownloadPipeline:
                 inner = text[start_idx + 3 :].strip()
 
             lines = inner.splitlines()
-            if lines and lines[0].strip().lower() in ("json", "jsonc", "javascript", "js", "text"):
+            if lines and lines[0].strip().lower() in (
+                "json",
+                "jsonc",
+                "javascript",
+                "js",
+                "text",
+            ):
                 inner = "\n".join(lines[1:]).strip()
-            elif lines and not lines[0].strip().startswith(("{", "[")) and len(lines) > 1:
+            elif (
+                lines and not lines[0].strip().startswith(("{", "[")) and len(lines) > 1
+            ):
                 inner = "\n".join(lines[1:]).strip()
             text = inner
 
@@ -65,12 +74,18 @@ class DownloadPipeline:
         except Exception as e:
             raise ValueError(f"解析 AI 评审结果 JSON 失败: {e}") from e
 
-        if isinstance(raw_data, dict) and "reviews" in raw_data and isinstance(raw_data["reviews"], list):
+        if (
+            isinstance(raw_data, dict)
+            and "reviews" in raw_data
+            and isinstance(raw_data["reviews"], list)
+        ):
             items = raw_data["reviews"]
         elif isinstance(raw_data, list):
             items = raw_data
         else:
-            raise ValueError("AI 评审结果 JSON 格式不符合规范：必须为评审列表或包含 'reviews' 键的字典")
+            raise ValueError(
+                "AI 评审结果 JSON 格式不符合规范：必须为评审列表或包含 'reviews' 键的字典"
+            )
 
         reviews: List[PatchReview] = []
         for idx, item in enumerate(items):
