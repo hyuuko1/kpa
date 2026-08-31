@@ -2,9 +2,10 @@
 
 [![Python >=3.10](https://img.shields.io/badge/python->=3.10-blue.svg)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/package%20manager-uv-purple.svg)](https://github.com/astral-sh/uv)
-[![Test](https://img.shields.io/badge/tests-139%20passed-success.svg)](tests/)
+[![Test](https://img.shields.io/badge/tests-143%20passed-success.svg)](tests/)
 
 `kp` 是一个用 Python 编写的 Linux 内核补丁邮件列表（lore.kernel.org / LKML）自动化抓取、AI 价值打分筛选、完整补丁集拉取与结构化清洗、AI 深度技术剖析与报告生成的全流程自动化工具。
+
 
 系统设计遵循 **AI 直读友好** 与 **轻量分层** 原则，将庞大的邮件线程拆解为易于大模型直接阅读与分析的 Markdown 说明、Markdown 引用讨论树以及独立的原生 `.patch` 代码文件，结合项目级 Skill 辅助开发者与 AI Agent 开展高质量的 Linux 内核代码深度技术分析。
 
@@ -120,6 +121,10 @@ uv run kp analyze --run-id 20260830_141211_4d77bf \
 
 # 4.4 使用 opencode 运行分析：
 uv run kp analyze --run-id 20260830_141211_4d77bf --agent opencode
+
+# 4.5 强制重新分析（默认会自动跳过已生成有效报告的补丁集）：
+uv run kp analyze --run-id 20260830_141211_4d77bf --force
+
 ```
 
 执行后，各补丁集的独立分析报告将保存在 `data/runs/<run_id>/reports/<sanitized_id>.md`。

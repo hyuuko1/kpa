@@ -126,3 +126,4 @@ class AnalyzeRunResult(BaseModel):
     total_count: int = 0  # 分析总数
     success_count: int = 0  # 成功总数
     failed_count: int = 0  # 失败总数
+    skipped_count: int = 0  # 跳过总数

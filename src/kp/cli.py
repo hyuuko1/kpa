@@ -182,6 +182,11 @@ def download_cmd(
     is_flag=True,
     help="仅检查待分析补丁集完整性，不触发 Agent 调用",
 )
+@click.option(
+    "--force",
+    is_flag=True,
+    help="强制重新分析已生成报告的补丁集 (默认自动跳过已分析的补丁集)",
+)
 @click.pass_context
 def analyze_cmd(
     ctx: click.Context,
@@ -190,6 +195,7 @@ def analyze_cmd(
     agent: str | None,
     concurrency: int | None,
     dry_run: bool,
+    force: bool,
 ) -> None:
     """阶段三：调用外部 AI Agent 进行深度代码与架构分析并生成独立报告"""
     app_config = ctx.obj["config"]
@@ -207,6 +213,7 @@ def analyze_cmd(
             agent_type=agent,
             concurrency=concurrency,
             dry_run=dry_run,
+            force=force,
         )
 
         if dry_run:
@@ -228,14 +235,26 @@ def analyze_cmd(
             click.echo(f"    - 运行 ID: {result.run_id}")
             click.echo(f"    - 补丁集总数: {result.total_count}")
             click.echo(f"    - 成功分析数: {result.success_count}")
+            if result.skipped_count > 0:
+                click.secho(f"    - 跳过分析数: {result.skipped_count}", fg="yellow")
             if result.failed_count > 0:
-                click.secho(f"    - 失败分析数: {result.failed_count}", fg="yellow")
+                click.secho(f"    - 失败分析数: {result.failed_count}", fg="red")
 
             for item in result.analyses:
                 if item.status == "success":
                     click.echo(
                         f"    - [{item.sanitized_id}] ({item.duration_seconds}s) 报告: {item.report_path}"
                     )
+                elif item.status == "skipped":
+                    if item.error_message == "Already analyzed":
+                        click.secho(
+                            f"    - [{item.sanitized_id}] 已跳过: 报告已存在 ({item.report_path})",
+                            fg="yellow",
+                        )
+                    else:
+                        click.echo(
+                            f"    - [{item.sanitized_id}] 跳过: {item.error_message}"
+                        )
                 else:
                     click.secho(
                         f"    - [{item.sanitized_id}] 失败: {item.error_message}",

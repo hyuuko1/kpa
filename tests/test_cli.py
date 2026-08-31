@@ -5,7 +5,7 @@ from unittest.mock import patch
 from click.testing import CliRunner
 
 from kp.cli import main
-from kp.models import RawMessage
+from kp.models import RawMessage, AnalyzeRunResult, PatchsetAnalysis
 from kp.adapters.lore import LoreExecutionError
 
 
@@ -391,6 +391,7 @@ def test_cli_analyze_dry_run_success(tmp_path: Path):
             agent_type=None,
             concurrency=None,
             dry_run=True,
+            force=False,
         )
 
 
@@ -440,6 +441,7 @@ def test_cli_analyze_success(tmp_path: Path):
             agent_type="opencode",
             concurrency=2,
             dry_run=False,
+            force=False,
         )
 
 
@@ -525,3 +527,44 @@ def test_cli_analyze_unexpected_error():
         result = runner.invoke(main, ["analyze", "--run-id", "20260830_120000_abc123"])
         assert result.exit_code == 1
         assert "未知错误: something unexpected" in result.output
+
+
+def test_cli_analyze_with_skipped_and_force(tmp_path: Path):
+    runner = CliRunner()
+    fake_res = AnalyzeRunResult(
+        run_id="20260830_120000_abc123",
+        analyses=[
+            PatchsetAnalysis(
+                msgid="<p1@test>",
+                sanitized_id="p1_test",
+                status="skipped",
+                report_path=tmp_path / "reports" / "p1_test.md",
+                error_message="Already analyzed",
+                duration_seconds=0.0,
+            ),
+            PatchsetAnalysis(
+                msgid="<p2@test>",
+                sanitized_id="p2_test",
+                status="success",
+                report_path=tmp_path / "reports" / "p2_test.md",
+                duration_seconds=2.5,
+            ),
+        ],
+        total_count=2,
+        success_count=1,
+        failed_count=0,
+        skipped_count=1,
+    )
+    with patch(
+        "kp.core.analyze_pipeline.AnalyzePipeline.run", return_value=fake_res
+    ) as mock_run:
+        result = runner.invoke(
+            main,
+            ["analyze", "--run-id", "20260830_120000_abc123", "--force"],
+        )
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        assert mock_run.call_args[1].get("force") is True
+        assert "已跳过" in result.output or "跳过" in result.output
+        assert "成功分析数: 1" in result.output
+        assert "跳过分析数: 1" in result.output

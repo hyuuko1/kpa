@@ -288,3 +288,9 @@ def test_session_manager_get_downloaded_patchset_dirs(tmp_path: Path):
     dirs = sm.get_downloaded_patchset_dirs(run_id)
     assert len(dirs) == 1
     assert dirs[0] == p1_dir
+
+
+def test_storage_test_environment_no_repo_pollution():
+    """验证单元测试环境不会在仓库根目录下生成 data/runs 目录"""
+    repo_data_runs = Path("data/runs")
+    assert not repo_data_runs.exists() or len(list(repo_data_runs.iterdir())) == 0

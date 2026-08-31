@@ -238,3 +238,58 @@ def test_analyze_pipeline_agent_selection(mock_get_runner, tmp_path):
     res = pipeline.run(run_id, agent_type="opencode")
     mock_get_runner.assert_called_once_with("opencode", cfg.agent)
     assert res.success_count == 1
+
+
+def test_analyze_pipeline_skip_already_analyzed(tmp_path):
+    sm = SessionManager(tmp_path)
+    run_id = "test-run-skip"
+    sm.create_session(run_id)
+
+    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1.mkdir(parents=True)
+    (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
+
+    # 预先生成报告
+    report_file = tmp_path / run_id / "reports" / "msg_1.md"
+    report_file.parent.mkdir(parents=True, exist_ok=True)
+    report_file.write_text("# Existing Report", encoding="utf-8")
+
+    cfg = load_config(None)
+    cfg.storage.data_dir = str(tmp_path)
+    dummy_runner = DummyRunner(should_fail=False)
+    pipeline = AnalyzePipeline(cfg, sm)
+
+    res = pipeline.run(run_id, runner_override=dummy_runner)
+    assert res.total_count == 1
+    assert res.skipped_count == 1
+    assert res.success_count == 0
+    assert res.analyses[0].status == "skipped"
+    assert res.analyses[0].error_message == "Already analyzed"
+    assert len(dummy_runner.called_with) == 0
+
+
+def test_analyze_pipeline_force_reanalyze(tmp_path):
+    sm = SessionManager(tmp_path)
+    run_id = "test-run-force"
+    sm.create_session(run_id)
+
+    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1.mkdir(parents=True)
+    (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
+
+    # 预先生成报告
+    report_file = tmp_path / run_id / "reports" / "msg_1.md"
+    report_file.parent.mkdir(parents=True, exist_ok=True)
+    report_file.write_text("# Old Report", encoding="utf-8")
+
+    cfg = load_config(None)
+    cfg.storage.data_dir = str(tmp_path)
+    dummy_runner = DummyRunner(should_fail=False)
+    pipeline = AnalyzePipeline(cfg, sm)
+
+    res = pipeline.run(run_id, force=True, runner_override=dummy_runner)
+    assert res.total_count == 1
+    assert res.skipped_count == 0
+    assert res.success_count == 1
+    assert res.analyses[0].status == "success"
+    assert len(dummy_runner.called_with) == 1

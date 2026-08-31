@@ -65,6 +65,7 @@ class AnalyzePipeline:
         agent_type: Optional[str] = None,
         concurrency: Optional[int] = None,
         dry_run: bool = False,
+        force: bool = False,
         runner_override: Optional[BaseAgentRunner] = None,
     ) -> AnalyzeRunResult:
         """执行阶段三深度分析流水线
@@ -75,6 +76,7 @@ class AnalyzePipeline:
             agent_type: 指定调用的外部 Agent 类型 ('agy' 或 'opencode'，可选)
             concurrency: 并发分析数 (可选，默认使用配置值)
             dry_run: 是否仅执行完整性校验而不触发 Agent 调用
+            force: 是否强制重新分析已生成报告的补丁集 (默认 False，自动跳过已分析补丁集)
             runner_override: 自定义 AgentRunner 实例 (用于测试注入)
 
         Returns:
@@ -141,6 +143,7 @@ class AnalyzePipeline:
                 total_count=0,
                 success_count=0,
                 failed_count=0,
+                skipped_count=0,
             )
 
         runner: Optional[BaseAgentRunner] = None
@@ -179,6 +182,17 @@ class AnalyzePipeline:
                     sanitized_id=sanitized_id,
                     status="skipped",
                     report_path=report_path,
+                    duration_seconds=0.0,
+                )
+
+            # 检查是否已分析过该补丁集 (如果已存在非空报告且未指定 force，则跳过)
+            if not force and report_path.exists() and report_path.stat().st_size > 0:
+                return PatchsetAnalysis(
+                    msgid=msgid,
+                    sanitized_id=sanitized_id,
+                    status="skipped",
+                    report_path=report_path,
+                    error_message="Already analyzed",
                     duration_seconds=0.0,
                 )
 
@@ -223,6 +237,7 @@ class AnalyzePipeline:
         total_count = len(analyses)
         success_count = sum(1 for a in analyses if a.status == "success")
         failed_count = sum(1 for a in analyses if a.status == "failed")
+        skipped_count = sum(1 for a in analyses if a.status == "skipped")
 
         return AnalyzeRunResult(
             run_id=run_id,
@@ -230,4 +245,5 @@ class AnalyzePipeline:
             total_count=total_count,
             success_count=success_count,
             failed_count=failed_count,
+            skipped_count=skipped_count,
         )

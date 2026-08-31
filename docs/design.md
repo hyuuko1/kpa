@@ -80,8 +80,10 @@
    - 保存全量 `parsed_series.json`。
 
 ### 阶段三：AI Agent 深度内核分析与独立报告生成 (Analyze & Report)
-1. **输入**：`kp analyze --run-id <ID> [--id <MSG_ID>] [--agent agy|opencode]`。
-2. **前置校验**：`AnalyzePipeline` 自动校验目标补丁集直读文件完整性。
+1. **输入**：`kp analyze --run-id <ID> [--id <MSG_ID>] [--agent agy|opencode] [--force] [--dry-run]`。
+2. **前置防重与完整性校验**：
+   - 检查 `data/runs/<run_id>/reports/<sanitized_id>.md` 是否已存在且非空。若已存在且未指定 `--force`，自动跳过该补丁集以避免重复消耗算力；
+   - 自动校验待分析补丁集直读文件完整性（`meta.json`、`patches/`、`00-cover-letter.md`）。
 3. **Agent 驱动**：`AgentRunner`（如 `AgyAgentRunner` / `OpenCodeAgentRunner`）以极简指令触发外部 Agent 加载 `kernel-patch-analyzer` skill (引用 `references/deep-analysis.md`)。
 4. **5 大分析维度**：背景动机与架构设计、锁与并发安全、内存与资源生命周期、潜在回归与性能/兼容性风险、社区审阅洞察与争议点。
 5. **持久化**：每个补丁集独立生成并校验 Markdown 报告，保存在 `data/runs/<run_id>/reports/<sanitized_id>.md`。
@@ -130,7 +132,7 @@ data/runs/<run_id>/
 | `src/kp/core/formatters.py` | `render_cover_letter_md`, `render_discussions_md`, `render_patch_file`, `render_meta_json` | AI 直读友好型 Markdown 与 Patch 文件生成 |
 | `src/kp/core/pipeline.py` | `FetchPipeline` | 阶段一业务流水线编排 |
 | `src/kp/core/download_pipeline.py`| `DownloadPipeline` | 阶段二业务流水线编排 |
-| `src/kp/core/analyze_pipeline.py` | `AnalyzePipeline` | 阶段三业务流水线编排 |
+| `src/kp/core/analyze_pipeline.py` | `AnalyzePipeline` | 阶段三业务流水线编排 (支持已分析防重跳过与并发调度) |
 | `src/kp/storage/session.py` | `SessionManager` | 会话目录管理与各类数据/Markdown/Patch/Report 文件持久化 |
 | `src/kp/cli.py` | `main`, `fetch_cmd`, `download_cmd`, `analyze_cmd` | Click CLI 用户命令行接口 |
 | `.agents/skills/kernel-patch-analyzer/` | `SKILL.md`, `references/` | 统一项目级 Skill (渐进式披露引导全流程) |
@@ -140,7 +142,12 @@ data/runs/<run_id>/
 ## 6. 开发、测试与维护准则
 
 1. **测试驱动开发 (TDD)**：新增任何功能或修改已有逻辑，必须先编写失败的单元测试，再编写实现代码，确保 `uv run pytest` 100% 通过。
-2. **文档自主维护要求**：
+2. **测试环境隔离与无污染**：
+   - 单元测试严禁向项目根目录下的 `data/runs` 写入任何数据；
+   - 统一通过 `tests/conftest.py` 将测试会话重定向至 `/tmp/kp_pytest_runs/`；
+   - 在每轮测试开始前，测试套件必须自动清理 `/tmp` 中的旧测试产物。
+3. **文档自主维护要求**：
    - 任何涉及接口签名、数据模型、存储目录结构、业务流程的修改，必须在完成代码修改与测试后，**立即自主更新本文档（`docs/design.md`）**。
    - 严禁出现代码与设计文档脱节的情况。
+
 
