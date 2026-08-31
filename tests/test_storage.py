@@ -115,7 +115,9 @@ def test_session_manager_load_patchsets(tmp_path: Path):
             "patches": ["[PATCH] mm: fix bug"],
         }
     ]
-    (run_dir / "patchsets.json").write_text(json.dumps(patchsets_data), encoding="utf-8")
+    (run_dir / "patchsets.json").write_text(
+        json.dumps(patchsets_data), encoding="utf-8"
+    )
 
     loaded = mgr.load_patchsets(run_dir)
     assert len(loaded) == 1
@@ -141,8 +143,12 @@ def test_session_manager_save_reviews(tmp_path: Path):
     run_dir.mkdir(parents=True)
 
     reviews = [
-        PatchReview(id="msg1", title="title1", score=90, recommend=True, reason="Great patch"),
-        PatchReview(id="msg2", title="title2", score=50, recommend=False, reason="Minor tweak"),
+        PatchReview(
+            id="msg1", title="title1", score=90, recommend=True, reason="Great patch"
+        ),
+        PatchReview(
+            id="msg2", title="title2", score=50, recommend=False, reason="Minor tweak"
+        ),
     ]
     filtered_patchsets = [
         Patchset(
@@ -249,3 +255,36 @@ def test_session_manager_save_stage3_prompt(tmp_path: Path):
     assert saved_path == expected_path
     assert expected_path.exists()
     assert expected_path.read_text(encoding="utf-8") == prompt_text
+
+
+def test_session_manager_reports_helpers(tmp_path: Path):
+    sm = SessionManager(tmp_path)
+    run_id = "test-run-123"
+    sm.create_session(run_id)
+
+    reports_dir = sm.get_reports_dir(run_id)
+    assert reports_dir.is_dir()
+    assert reports_dir == tmp_path / run_id / "reports"
+
+    report_path = sm.get_report_path(run_id, "patchset_1_msgid")
+    assert report_path == tmp_path / run_id / "reports" / "patchset_1_msgid.md"
+
+    assert sm.list_reports(run_id) == []
+    report_path.write_text("# Report", encoding="utf-8")
+    assert sm.list_reports(run_id) == [report_path]
+
+
+def test_session_manager_get_downloaded_patchset_dirs(tmp_path: Path):
+    sm = SessionManager(tmp_path)
+    run_id = "test-run-456"
+    sm.create_session(run_id)
+
+    assert sm.get_downloaded_patchset_dirs(run_id) == []
+
+    p1_dir = tmp_path / run_id / "patchsets" / "msg_1"
+    p1_dir.mkdir(parents=True)
+    (p1_dir / "meta.json").write_text("{}", encoding="utf-8")
+
+    dirs = sm.get_downloaded_patchset_dirs(run_id)
+    assert len(dirs) == 1
+    assert dirs[0] == p1_dir
