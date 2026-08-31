@@ -30,7 +30,7 @@ class SafetyValidator:
 
     def validate_query(self, query: str) -> None:
         # 提取 d: 条件
-        # 匹配形如 d:2.hours.ago.. 或 d:2026-08-30T10:00:00Z.. 或 d:90.minutes.ago..
+        # 匹配形如 d:2.hours.ago.. 或 d:2026-08-30T10:00:00Z.. 或 d:2026-08-30T10:00:00Z..2026-08-30T18:00:00Z
         match = re.search(r"\bd:([^\s\"]+)", query)
         if not match:
             if self.config.require_time_filter:
@@ -39,10 +39,35 @@ class SafetyValidator:
                 )
             return
 
-        date_expr = match.group(1).rstrip(".")
-        self._validate_date_expr(date_expr)
+        raw_expr = match.group(1)
+        self._validate_date_expr(raw_expr)
 
-    def _validate_date_expr(self, expr: str) -> None:
+    def _validate_date_expr(self, raw_expr: str) -> None:
+        # 检查是否为显式 START..END 区间
+        if ".." in raw_expr:
+            parts = raw_expr.split("..", 1)
+            start_part = parts[0].strip()
+            end_part = parts[1].strip()
+            if start_part and end_part:
+                # START..END 两个绝对时间或相对时间
+                try:
+                    start_dt = datetime.fromisoformat(start_part.replace("Z", "+00:00"))
+                    end_dt = datetime.fromisoformat(end_part.replace("Z", "+00:00"))
+                    if start_dt.tzinfo is None:
+                        start_dt = start_dt.replace(tzinfo=timezone.utc)
+                    if end_dt.tzinfo is None:
+                        end_dt = end_dt.replace(tzinfo=timezone.utc)
+                    span_hours = (end_dt - start_dt).total_seconds() / 3600.0
+                    if span_hours > (self.config.max_time_span_hours + 0.1):
+                        raise SafetyValidationError(
+                            f"安全限制：查询时间跨度 {span_hours:.1f} 小时超过最大允许限制 {self.config.max_time_span_hours} 小时"
+                        )
+                    return
+                except ValueError:
+                    pass
+
+        expr = raw_expr.rstrip(".")
+
         # 1. 相对时间表达解析 (e.g. 2.hours.ago, 90.minutes.ago, 1.day.ago)
         rel_match = re.match(
             r"^(\d+)\.(minutes?|hours?|days?|weeks?|months?|years?)\.ago$",

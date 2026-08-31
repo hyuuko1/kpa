@@ -35,22 +35,31 @@ def main(ctx: click.Context, config_path: Path | None) -> None:
     required=True,
     help='lei 查询语句 (与 lei q 一致，如 "l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago..")',
 )
+@click.option(
+    "--since-last",
+    is_flag=True,
+    help="增量巡检模式：自动对齐上次同步游标，支持超大跨度自适应分批 (Auto-chunking)",
+)
 @click.pass_context
-def fetch_cmd(ctx: click.Context, query: str) -> None:
-    """阶段一：抓取补丁元数据、清洗聚合并生成 AI 提示词"""
+def fetch_cmd(ctx: click.Context, query: str, since_last: bool) -> None:
+    """阶段一：抓取补丁元数据、清洗聚合并持久化"""
     app_config = ctx.obj["config"]
     pipeline = FetchPipeline(app_config)
 
     try:
-        click.echo(f"[*] 执行查询: {query}")
-        result = pipeline.run(query)
+        if since_last:
+            click.echo(f"[*] 执行增量巡检查询 (--since-last): {query}")
+        else:
+            click.echo(f"[*] 执行查询: {query}")
+
+        result = pipeline.run(query, since_last=since_last)
         click.secho("[✓] 抓取完成！", fg="green", bold=True)
         click.echo(f"    - 运行 ID: {result.run_id}")
         click.echo(f"    - 原始邮件数: {result.raw_count}")
         click.echo(f"    - 聚合 Patchset 数: {result.patchset_count}")
         click.echo(f"    - 会话目录: {result.run_dir.resolve()}")
         click.secho(
-            f"\n[提示] 可使用 skill 'kernel-patch-analyzer' 进行补丁初筛与打分 (输出 reviews.json)，或直接执行 kp download --run-id {result.run_id} --id <target_id>。",
+            f"\n[提示] 可使用 skill 'kernel-patch-analyzer' 进行补丁初筛与打分 (0-10分制，输出 reviews.json)，或直接执行 kp download --run-id {result.run_id} --id <target_id>。",
             fg="cyan",
         )
     except SafetyValidationError as e:
@@ -85,10 +94,15 @@ def fetch_cmd(ctx: click.Context, query: str) -> None:
 )
 @click.option(
     "--min-score",
-    default=70,
-    type=int,
+    default=7,
+    type=click.IntRange(0, 10),
     show_default=True,
-    help="最低评分过滤阈值 (低于该分数的补丁集将被过滤，除非 recommend=true)",
+    help="最低评分过滤阈值 (0-10分制，低于该分数的补丁集将被过滤，除非 recommend=true)",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="强制重新下载即使本地已是最新",
 )
 @click.pass_context
 def download_cmd(
@@ -97,8 +111,9 @@ def download_cmd(
     target_ids: Tuple[str, ...],
     input_file: str | None,
     min_score: int,
+    force: bool,
 ) -> None:
-    """阶段二：下载选定补丁完整邮件线索、结构化解析并生成直读文件"""
+    """阶段二：下载选定补丁完整邮件线索、结构化解析并生成全局直读文件"""
     if not target_ids and not input_file:
         click.secho(
             "[错误] 请至少指定 --id 或 --input 参数以选择要下载的补丁集",
@@ -130,6 +145,7 @@ def download_cmd(
             target_ids=list(target_ids) if target_ids else None,
             reviews_content=reviews_content,
             min_score=min_score,
+            force=force,
         )
         click.secho("[✓] 下载与结构化解析完成！", fg="green", bold=True)
         click.echo(f"    - 运行 ID: {result.run_id}")
@@ -187,6 +203,20 @@ def download_cmd(
     is_flag=True,
     help="强制重新分析已生成报告的补丁集 (默认自动跳过已分析的补丁集)",
 )
+@click.option(
+    "-p",
+    "--prompt",
+    "custom_prompt",
+    type=str,
+    default=None,
+    help="追加自定义重点关注提示词 (将附加在 Agent 分析指令末尾)",
+)
+@click.option(
+    "--prompt-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="从文本文件读取追加自定义提示词",
+)
 @click.pass_context
 def analyze_cmd(
     ctx: click.Context,
@@ -196,8 +226,17 @@ def analyze_cmd(
     concurrency: int | None,
     dry_run: bool,
     force: bool,
+    custom_prompt: str | None,
+    prompt_file: Path | None,
 ) -> None:
     """阶段三：调用外部 AI Agent 进行深度代码与架构分析并生成独立报告"""
+    if prompt_file is not None:
+        file_prompt = prompt_file.read_text(encoding="utf-8").strip()
+        if custom_prompt:
+            custom_prompt = f"{custom_prompt}\n\n{file_prompt}"
+        else:
+            custom_prompt = file_prompt
+
     app_config = ctx.obj["config"]
     pipeline = AnalyzePipeline(app_config)
 
@@ -214,6 +253,7 @@ def analyze_cmd(
             concurrency=concurrency,
             dry_run=dry_run,
             force=force,
+            custom_prompt=custom_prompt,
         )
 
         if dry_run:

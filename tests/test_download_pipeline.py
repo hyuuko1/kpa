@@ -117,21 +117,21 @@ def test_download_pipeline_by_reviews(mock_env, tmp_path):
         {
             "id": "patch1@example.com",
             "title": "[PATCH 1/2] mm: fix alloc bug",
-            "score": 85,
+            "score": 8,
             "recommend": True,
             "reason": "Important memory management fix",
         },
         {
             "id": "patch2@example.com",
             "title": "[PATCH] net: trivial typo fix",
-            "score": 50,
+            "score": 5,
             "recommend": False,
             "reason": "Trivial typo",
         },
         {
             "id": "patch3@example.com",
             "title": "[PATCH 0/3] sched: revamp balancer",
-            "score": 65,
+            "score": 6,
             "recommend": True,
             "reason": "Architecture redesign recommended despite lower score",
         },
@@ -141,7 +141,7 @@ def test_download_pipeline_by_reviews(mock_env, tmp_path):
     result = pipeline.run(
         run_id=run_id,
         reviews_content=reviews_json_str,
-        min_score=70,
+        min_score=7,
     )
 
     assert isinstance(result, DownloadResult)
@@ -204,7 +204,7 @@ def test_download_pipeline_dict_with_reviews_key(mock_env):
         "reviews": [
             {
                 "id": "patch1@example.com",
-                "score": 95,
+                "score": 9,
                 "recommend": True,
                 "reason": "Top priority",
             }
@@ -299,7 +299,7 @@ def test_download_pipeline_combined_targets_and_reviews_dedup(mock_env):
     reviews_data = [
         {
             "id": "patch1@example.com",
-            "score": 90,
+            "score": 9,
             "recommend": True,
             "reason": "Important",
         }
@@ -351,7 +351,7 @@ def test_download_pipeline_markdown_fences_reviews(mock_env):
 [
   {
     "id": "patch1@example.com",
-    "score": 90,
+    "score": 9,
     "recommend": true,
     "reason": "Crucial fix"
   }
@@ -361,7 +361,7 @@ def test_download_pipeline_markdown_fences_reviews(mock_env):
     result = pipeline.run(
         run_id=run_id,
         reviews_content=fenced_content,
-        min_score=70,
+        min_score=7,
     )
 
     assert result.downloaded_count == 1
@@ -404,7 +404,7 @@ def test_download_pipeline_markdown_fences_with_leading_conversational_text(mock
 [
   {
     "id": "patch1@example.com",
-    "score": 85,
+    "score": 8,
     "recommend": true,
     "reason": "Well tested fix"
   }
@@ -416,7 +416,7 @@ Let me know if you need further analysis!"""
     result = pipeline.run(
         run_id=run_id,
         reviews_content=conversational_content,
-        min_score=70,
+        min_score=7,
     )
 
     assert result.downloaded_count == 1
@@ -451,8 +451,8 @@ def test_download_pipeline_invalid_item_in_reviews(mock_env):
         session_manager=session_manager,
     )
 
-    # score 超过 100 不合法
-    invalid_data = [{"id": "p1", "score": 150, "recommend": True, "reason": "bad"}]
+    # score 超过 10 不合法
+    invalid_data = [{"id": "p1", "score": 15, "recommend": True, "reason": "bad"}]
 
     with pytest.raises(ValueError) as exc_info:
         pipeline.run(

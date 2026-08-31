@@ -66,6 +66,27 @@ def test_absolute_time_filter():
     with pytest.raises(SafetyValidationError, match="超过.*限制"):
         validator.validate_query(f"l:linux-mm.kvack.org AND d:{old}..")
 
+    # START..END range within 48h -> valid
+    t_start = (datetime.now(timezone.utc) - timedelta(hours=30)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    t_end = (datetime.now(timezone.utc) - timedelta(hours=10)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    validator.validate_query(f"l:linux-mm.kvack.org AND d:{t_start}..{t_end}")
+
+    # START..END range over 48h (e.g. 50h span) -> invalid
+    t_start_over = (datetime.now(timezone.utc) - timedelta(hours=60)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    t_end_over = (datetime.now(timezone.utc) - timedelta(hours=10)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    with pytest.raises(SafetyValidationError, match="超过.*限制"):
+        validator.validate_query(
+            f"l:linux-mm.kvack.org AND d:{t_start_over}..{t_end_over}"
+        )
+
 
 def test_invalid_date_format():
     config = SafetyConfig(max_time_span_hours=48, require_time_filter=True)

@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Optional
 
 from kp.config import AgentConfig
 
@@ -42,6 +43,7 @@ class BaseAgentRunner(ABC):
         report_output_path: Path,
         kernel_path: Path | str | None = None,
         skill_name: str = "kernel-patch-analyzer",
+        custom_prompt: Optional[str] = None,
     ) -> None:
         """Execute deep technical analysis on patchset using external agent."""
 
@@ -58,6 +60,7 @@ class AgyAgentRunner(BaseAgentRunner):
         report_output_path: Path,
         kernel_path: Path | str | None = None,
         skill_name: str = "kernel-patch-analyzer",
+        custom_prompt: Optional[str] = None,
     ) -> None:
         if not self.check_available():
             raise AgentNotFoundError(
@@ -65,15 +68,23 @@ class AgyAgentRunner(BaseAgentRunner):
             )
 
         if kernel_path:
-            prompt = (
+            base_prompt = (
                 f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，"
                 f"Linux 内核代码路径：{kernel_path}，请将生成的深度分析报告写入文件：{report_output_path.resolve()}"
             )
         else:
-            prompt = (
+            base_prompt = (
                 f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，"
                 f"请将生成的深度分析报告写入文件：{report_output_path.resolve()}"
             )
+
+        if custom_prompt and custom_prompt.strip():
+            prompt = (
+                f"{base_prompt}\n\n【用户附加重点关注要求】：\n{custom_prompt.strip()}"
+            )
+        else:
+            prompt = base_prompt
+
         args = [self.cmd, "--dangerously-skip-permissions", "-p", prompt]
 
         try:
@@ -112,6 +123,7 @@ class OpenCodeAgentRunner(BaseAgentRunner):
         report_output_path: Path,
         kernel_path: Path | str | None = None,
         skill_name: str = "kernel-patch-analyzer",
+        custom_prompt: Optional[str] = None,
     ) -> None:
         if not self.check_available():
             raise AgentNotFoundError(
@@ -119,15 +131,23 @@ class OpenCodeAgentRunner(BaseAgentRunner):
             )
 
         if kernel_path:
-            prompt = (
+            base_prompt = (
                 f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，"
                 f"Linux 内核代码路径：{kernel_path}，请将生成的深度分析报告写入文件：{report_output_path.resolve()}"
             )
         else:
-            prompt = (
+            base_prompt = (
                 f"使用 skill '{skill_name}' 分析补丁集：{patchset_dir.resolve()}，"
                 f"请将生成的深度分析报告写入文件：{report_output_path.resolve()}"
             )
+
+        if custom_prompt and custom_prompt.strip():
+            prompt = (
+                f"{base_prompt}\n\n【用户附加重点关注要求】：\n{custom_prompt.strip()}"
+            )
+        else:
+            prompt = base_prompt
+
         args = [self.cmd, "run", "--auto", prompt]
 
         try:

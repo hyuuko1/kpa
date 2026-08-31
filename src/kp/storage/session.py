@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import List, Tuple
 from kp.config import StorageConfig
 from kp.models import RawMessage, Patchset, RunManifest, PatchReview, ParsedPatchset
+from kp.storage.paths import (
+    get_patchset_dir as compute_patchset_dir,
+    get_report_path as compute_report_path,
+)
+from kp.storage.db import DatabaseManager
 from kp.core.formatters import (
     render_cover_letter_md,
     render_discussions_md,
@@ -16,7 +21,7 @@ from kp.core.formatters import (
 
 
 class SessionManager:
-    """管理运行会话目录与数据持久化"""
+    """管理运行会话目录、数据库与数据持久化"""
 
     def __init__(self, config: StorageConfig | Path | str):
         if isinstance(config, (str, Path)):
@@ -24,14 +29,18 @@ class SessionManager:
         else:
             self.config = config
 
+        self.data_dir = Path(self.config.data_dir)
+        self.db = DatabaseManager(self.data_dir / "kp.db")
+        self.db.init_tables()
+
     def create_session_dir(self) -> Tuple[str, Path]:
-        base_dir = Path(self.config.data_dir)
-        base_dir.mkdir(parents=True, exist_ok=True)
+        runs_base = self.data_dir / "runs"
+        runs_base.mkdir(parents=True, exist_ok=True)
 
         now_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         run_id = now_str
 
-        run_dir = base_dir / run_id
+        run_dir = runs_base / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_id, run_dir
 
@@ -41,35 +50,86 @@ class SessionManager:
         return run_dir
 
     def get_run_dir(self, run_id: str) -> Path:
-        base_dir = Path(self.config.data_dir)
-        return base_dir / run_id
+        return self.data_dir / "runs" / run_id
 
-    def get_reports_dir(self, run_id: str) -> Path:
-        reports_dir = self.get_run_dir(run_id) / "reports"
+    def get_patchset_dir(self, msgid: str, date_str: str | None = None) -> Path:
+        return compute_patchset_dir(self.data_dir, msgid, date_str)
+
+    def get_report_path(self, msgid: str, date_str: str | None = None) -> Path:
+        return compute_report_path(self.data_dir, msgid, date_str)
+
+    def get_reports_dir(self, run_id: str | None = None) -> Path:
+        """返回报告根目录"""
+        if run_id:
+            # 兼容旧逻辑或返回 run 内部 reports
+            r_dir = self.get_run_dir(run_id) / "reports"
+            r_dir.mkdir(parents=True, exist_ok=True)
+            return r_dir
+        reports_dir = self.data_dir / "reports"
         reports_dir.mkdir(parents=True, exist_ok=True)
         return reports_dir
 
-    def get_report_path(self, run_id: str, sanitized_id: str) -> Path:
-        return self.get_run_dir(run_id) / "reports" / f"{sanitized_id}.md"
+    def list_reports(self, run_id: str | None = None) -> List[Path]:
+        """列出报告文件，优先从全局 reports 查找，兼容 run 内部 reports"""
+        found_reports: List[Path] = []
+        if run_id:
+            run_dir = self.get_run_dir(run_id)
+            # 检查 run_dir 下是否有 patchsets
+            ps_file = run_dir / "patchsets.json"
+            if ps_file.exists():
+                try:
+                    patchsets = self.load_patchsets(run_dir)
+                    for ps in patchsets:
+                        rpath = self.get_report_path(ps.id, ps.date)
+                        if rpath.exists() and rpath.is_file():
+                            found_reports.append(rpath)
+                except Exception:
+                    pass
+            # 兼容旧 run_dir/reports 目录
+            legacy_dir = run_dir / "reports"
+            if legacy_dir.exists():
+                found_reports.extend(
+                    [p for p in legacy_dir.glob("*.md") if p.is_file()]
+                )
+            return sorted(list(set(found_reports)))
 
-    def list_reports(self, run_id: str) -> List[Path]:
-        reports_dir = self.get_run_dir(run_id) / "reports"
+        # 全局报告列表
+        reports_dir = self.data_dir / "reports"
         if not reports_dir.exists():
             return []
-        return sorted([p for p in reports_dir.glob("*.md") if p.is_file()])
+        return sorted([p for p in reports_dir.glob("**/*.md") if p.is_file()])
 
     def get_downloaded_patchset_dirs(self, run_id: str) -> List[Path]:
-        patchsets_dir = self.get_run_dir(run_id) / "patchsets"
-        if not patchsets_dir.exists():
+        """获取指定 run_id 关联的所有已下载且包含 meta.json 的补丁集目录"""
+        run_dir = self.get_run_dir(run_id)
+        if not run_dir.exists():
             return []
-        return sorted(
-            [
-                p
-                for p in patchsets_dir.iterdir()
-                if p.is_dir() and (p / "meta.json").exists()
-            ],
-            key=lambda p: p.name,
-        )
+
+        dirs: List[Path] = []
+
+        # 1. 尝试从 filtered_patchsets.json 或 patchsets.json 中查找
+        for json_name in ["filtered_patchsets.json", "patchsets.json"]:
+            p_file = run_dir / json_name
+            if p_file.exists():
+                try:
+                    data = json.loads(p_file.read_text(encoding="utf-8"))
+                    for item in data:
+                        ps = Patchset.model_validate(item)
+                        p_dir = self.get_patchset_dir(ps.id, ps.date)
+                        if p_dir.exists() and (p_dir / "meta.json").exists():
+                            if p_dir not in dirs:
+                                dirs.append(p_dir)
+                except Exception:
+                    pass
+
+        # 2. 兼容旧 run_dir / "patchsets" 目录
+        legacy_dir = run_dir / "patchsets"
+        if legacy_dir.exists():
+            for p in legacy_dir.iterdir():
+                if p.is_dir() and (p / "meta.json").exists() and p not in dirs:
+                    dirs.append(p)
+
+        return sorted(dirs, key=lambda p: p.name)
 
     def load_patchsets(self, run_dir: Path) -> List[Patchset]:
         patchsets_file = run_dir / "patchsets.json"
@@ -129,11 +189,19 @@ class SessionManager:
 
     def save_parsed_patchset(
         self,
-        run_dir: Path,
+        run_dir: Path | None,
         sanitized_id: str,
         parsed_patchset: ParsedPatchset,
+        date_str: str | None = None,
     ) -> Path:
-        patchset_dir = run_dir / "patchsets" / sanitized_id
+        """保存拆解后的补丁集到全局资产库 data/patchsets/YYYY-MM/<clean_id>/"""
+        if date_str is None:
+            if parsed_patchset.cover_letter and parsed_patchset.cover_letter.date:
+                date_str = parsed_patchset.cover_letter.date
+            elif parsed_patchset.patches and parsed_patchset.patches[0].date:
+                date_str = parsed_patchset.patches[0].date
+
+        patchset_dir = self.get_patchset_dir(parsed_patchset.id, date_str)
         patchset_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. 保存全量 parsed_series.json

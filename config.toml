@@ -3,6 +3,16 @@
 max_time_span_hours = 48
 # 是否强制要求 query 必须包含 d: 时间范围
 require_time_filter = true
+# --since-last 单批次最大时间跨度（小时）
+chunk_hours = 24
+# --since-last 最大自动追溯上限（小时）
+max_catchup_hours = 72
+# 邮件列表投递延迟容差（分钟）
+overlap_grace_minutes = 10
+
+[storage]
+# 数据全局根目录（包含 kp.db, patchsets/, reports/, runs/）
+data_dir = "data"
 
 [lore]
 # 默认使用的 lore public-inbox 地址

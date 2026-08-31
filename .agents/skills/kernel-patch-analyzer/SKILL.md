@@ -18,25 +18,30 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 │ 用户意图 / 输入状态                                对应切入点与执行路径         │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │ 1. 自然语言描述需求 (如 "分析过去2小时内存管理补丁")  ──► 路径 A: 端到端全流程    │
-│ 2. 已有 run-id / 刚完成 fetch (如 "帮这个 run 打分") ──► 路径 B: 初筛打分与下载   │
-│ 3. 已有 reviews.json (如 "下载推荐的补丁集")         ──► 路径 C: 补丁下载与拆解   │
-│ 4. 已完成 download (如 "深度分析已下载的补丁")       ──► 路径 D: 深度分析与落盘   │
-│ 5. 指定单个补丁集 ID / 链接                          ──► 路径 E: 靶向单补丁分析   │
+│ 2. 增量例行巡检 (如 "增量检查今天的新补丁")          ──► 路径 A+: 增量巡检抓取   │
+│ 3. 已有 run-id / 刚完成 fetch (如 "帮这个 run 打分") ──► 路径 B: 初筛打分与下载   │
+│ 4. 已有 reviews.json (如 "下载推荐的补丁集")         ──► 路径 C: 补丁下载与拆解   │
+│ 5. 已完成 download (如 "深度分析已下载的补丁")       ──► 路径 D: 深度分析与落盘   │
+│ 6. 指定单个补丁集 ID / 链接                          ──► 路径 E: 靶向单补丁分析   │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 路径 A：端到端全流程 (End-to-End)
 1. **理解意图**：将用户的自然语言需求转换为合法的 `lei q` 查询语句；
 2. **抓取**：运行 `uv run kp fetch -q "<query>"`，获取 `run_id`；
-3. **初筛打分**：读取 `data/runs/<run_id>/patchsets.json`，根据 [初筛指南](references/screening.md) 评估打分，将结果写入 `data/runs/<run_id>/reviews.json`；
+3. **初筛打分**：读取 `data/runs/<run_id>/patchsets.json`，根据 [初筛指南](references/screening.md) 评估打分 (0-10 分制)，将结果写入 `data/runs/<run_id>/reviews.json`；
 4. **下载拆解**：运行 `uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json`；
-5. **深度分析**：直接运行 `uv run kp analyze --run-id <run_id> [--concurrency 3]`（注意：并发度最高不超过 3）。无需进行任何手动文件预检或探测，`kp analyze` 会自动完成所有前置校验，最终将报告保存至 `data/runs/<run_id>/reports/<sanitized_id>.md`。
+5. **深度分析**：直接运行 `uv run kp analyze --run-id <run_id> [--concurrency 3]`（注意：并发度最高不超过 3）。无需进行任何手动文件预检或探测，`kp analyze` 会自动完成所有前置校验，最终将报告保存至全局报告库 `data/reports/YYYY-MM/<clean_id>.md`。
+
+### 路径 A+：增量例行巡检 (Incremental Inspection)
+- 运行 `uv run kp fetch -q "<query>" --since-last`。
+- 系统自动基于上次同步游标抓取增量补丁，支持对大跨度进行自动分批抓取 (Auto-chunking) 与游标推进。
 
 ### 路径 B：从初筛打分起步 (From Screening)
 - **前置条件**：用户提供了已存在的 `run_id`，或目录下已有 `data/runs/<run_id>/patchsets.json`。
 - **执行动作**：
   1. 读取 `data/runs/<run_id>/patchsets.json` (或 `manifest.json`)；
-  2. 遵循 [初筛指南](references/screening.md) 完成打分与推荐判定；
+  2. 遵循 [初筛指南](references/screening.md) 完成打分与推荐判定 (0-10 整数制)；
   3. 将 JSON 格式结果写入 `data/runs/<run_id>/reviews.json`；
   4. 提示用户或继续运行 `uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json`。
 
@@ -45,12 +50,14 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 - **执行动作**：
   - 基于评审结果下载：`uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json`
   - 或指定特定 ID 下载：`uv run kp download --run-id <run_id> --id "<msgid>"`
-  - `kp` 会自动将邮件线程拆解为直读友好文件（Cover Letter、Discussions Markdown 树、独立 `.patch` 文件与 `meta.json`）。
+  - 若已是最新，`kp` 会自动跳过重复下载；如需强制覆盖，可添加 `--force`。
+  - `kp` 会自动将邮件线程拆解为全局直读友好文件（Cover Letter、Discussions Markdown 树、独立 `.patch` 文件与 `meta.json`）。
 
 ### 路径 D：从深度技术分析起步 (From Deep Analysis)
 - **触发条件**：用户明确要求分析已下载单个补丁集或者全量分析。
 - **执行动作**：
   - **直接执行命令**：直接运行 `uv run kp analyze --run-id <run_id> [--concurrency 3]`（全量分析）或 `uv run kp analyze --run-id <run_id> --id "<msgid>"`（指定分析单个补丁集）；
+  - 📝 **自定义关注提示词**：可通过 `-p / --prompt "重点关注..."` 或 `--prompt-file <path>` 追加针对特定业务逻辑或锁安全的重点分析要求；
   - 🔒 **并发度上限限制**：使用 `--concurrency` 时，**并发度严禁超过 3**（即 `--concurrency <= 3`，推荐设置为 2 或 3），避免启动过多外部 Agent 子进程造成系统负载过重或触发 API 配额限制；
   - ⚡ **零前置检查原则**：Agent **切勿**在执行前检查会话目录等是否存在，也**无需**预先运行 `--dry-run`。`kp analyze` 工具本身在执行时会自动进行所有的前置检查，遇错会输出清晰提示；
   - ⚠️ **严禁手动分析**：当前对话中的 Agent 严禁自行直接读取直读文件撰写报告，必须统一直接调用 `uv run kp analyze` 命令行调度子进程完成。
@@ -71,7 +78,7 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 
 `kp fetch` 底层调用 `lei q`。构建查询语句时必须遵循以下规则与最佳实践：
 
-1. **强制安全时间跨度限制**：查询条件中**必须**包含 `d:` 时间过滤。
+1. **强制安全时间跨度限制**：查询条件中**必须**包含 `d:` 时间过滤（除非启用 `--since-last`，此时系统会自动注入时间区间）。
    - 相对时间：`d:2.hours.ago..`、`d:24.hours.ago..`、`d:48.hours.ago..`、`d:1.day.ago..`
    - 绝对时间：`d:2026-08-31T08:00..2026-08-31T10:00`
 2. **过滤回复邮件**：建议始终加上 `NOT s:Re`，避免拉取重复的单封回复邮件。
@@ -95,6 +102,7 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 #### 自然语言映射示例表
 | 用户自然语言意图 | 推荐的 `kp fetch` 命令 |
 |---|---|
+| “增量巡检内存管理子系统的新补丁” | `uv run kp fetch -q "l:linux-mm.kvack.org AND NOT s:Re" --since-last` |
 | “分析过去两小时内存管理子系统的改动” | `uv run kp fetch -q "l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago.."` |
 | “查看最近1小时网络子系统 netdev 补丁” | `uv run kp fetch -q "l:netdev@vger.kernel.org AND NOT s:Re AND d:1.hours.ago.."` |
 | “检索过去2小时内调度子系统 (Scheduler) 的补丁” | `uv run kp fetch -q "(dfn:kernel/sched OR dfn:include/linux/sched) AND NOT s:Re AND d:2.hours.ago.."` |
@@ -108,48 +116,57 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 ### 2.2 CLI 常用命令汇总
 
 ```bash
-# 1. 抓取元数据
+# 1. 抓取元数据 (支持普通抓取或增量巡检)
 uv run kp fetch -q "<lei_query>"
+uv run kp fetch -q "<lei_query>" --since-last
 
-# 2. 下载补丁集 (支持基于 reviews.json 或指定 ID)
+# 2. 下载补丁集 (支持基于 reviews.json 或指定 ID，支持 --force 强制更新)
 uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json
 uv run kp download --run-id <run_id> --id "<msgid_1>" --id "<msgid_2>"
-uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json --min-score 80
+uv run kp download --run-id <run_id> -i data/runs/<run_id>/reviews.json --min-score 8
+uv run kp download --run-id <run_id> --id "<msgid>" --force
 
-# 3. 执行阶段三深度分析
+# 3. 执行阶段三深度分析 (支持自定义提示词与强制覆盖)
 uv run kp analyze --run-id <run_id>                                    # 全量分析该 run 下所有补丁集
 uv run kp analyze --run-id <run_id> --id "<msgid>"                     # 仅分析指定补丁集
+uv run kp analyze --run-id <run_id> -p "重点关注锁竞争与 RCU 同步"       # 追加自定义分析指令
+uv run kp analyze --run-id <run_id> --prompt-file custom_prompt.txt     # 从文件读取自定义分析指令
 uv run kp analyze --run-id <run_id> --agent opencode                   # 指定使用的外部 Agent
 uv run kp analyze --run-id <run_id> --concurrency 3                    # 设置并发数 (严禁超过 3)
+uv run kp analyze --run-id <run_id> --force                            # 强制重新分析已出报告的补丁集
 uv run kp analyze --run-id <run_id> --dry-run                          # 仅预检补丁集直读文件完整性
 ```
 
 ---
 
-## 📁 3. 会话数据流与目录规范
+## 📁 3. 全局存储与会话目录规范
 
-所有数据均按会话保存在 `data/runs/<run_id>/` 目录下：
+数据按全局资产库与会话日志组织存储在 `data/` 下：
 
 ```text
-data/runs/<run_id>/
-├── manifest.json              # [阶段一] 会话清单与元数据
-├── raw_metadata.json          # [阶段一] lei 返回的原始邮件列表
-├── patchsets.json             # [阶段一] 并查集聚合后的补丁集列表
-├── reviews.json               # [初筛产物] AI 打分与推荐列表 (0-100分)
-├── filtered_patchsets.json    # [阶段二] 经筛选后实际待下载的补丁集
-├── patchsets/                 # [阶段二] 直读友好型拆解目录
-│   └── <sanitized_msgid>/     # 转义后的安全目录名
-│       ├── 00-cover-letter.md # 系列背景、动机与整体 Diffstat
-│       ├── discussions.md     # 社区 Review 讨论树 (Markdown 引用排版)
-│       ├── patches/           # 独立拆解的标准 Git Patch 文件
-│       │   ├── 0001-xxx.patch # 包含 Commit Message、Trailers 与统一 Diff
-│       │   └── 0002-xxx.patch
-│       ├── meta.json          # 轻量级索引元数据
-│       ├── parsed_series.json # 结构化数据
-│       └── series.mbx         # 原始邮件线程 Mbox
-└── reports/                   # [阶段三产物] 各补丁集独立深度技术分析报告
-    ├── <sanitized_msgid_1>.md
-    └── <sanitized_msgid_2>.md
+data/
+├── kp.db                      # [核心索引] SQLite 数据库 (WAL 模式，存储游标/运行记录/补丁集状态)
+├── patchsets/                 # [全局补丁集资产库]
+│   └── YYYY-MM/               # 按年月分桶
+│       └── <clean_id>/        # 转义后的安全 Message-ID 目录
+│           ├── 00-cover-letter.md # 系列背景、动机与整体 Diffstat
+│           ├── discussions.md     # 社区 Review 讨论树 (Markdown 引用排版)
+│           ├── patches/           # 独立拆解的标准 Git Patch 文件
+│           │   ├── 0001-xxx.patch # 包含 Commit Message、Trailers 与统一 Diff
+│           │   └── 0002-xxx.patch
+│           ├── meta.json          # 轻量级索引元数据
+│           ├── parsed_series.json # 结构化数据
+│           └── series.mbx         # 原始邮件线程 Mbox
+├── reports/                   # [全局报告库] 各补丁集独立深度技术分析报告
+│   └── YYYY-MM/
+│       ├── <clean_id_1>.md
+│       └── <clean_id_2>.md
+└── runs/                      # [会话执行日志]
+    └── <run_id>/
+        ├── manifest.json      # 会话清单与元数据
+        ├── raw_metadata.json  # lei 返回的原始邮件列表
+        ├── patchsets.json     # 聚合后的补丁集列表
+        └── reviews.json       # AI 打分与推荐列表 (0-10分制)
 ```
 
 ---
@@ -159,6 +176,6 @@ data/runs/<run_id>/
 根据当前所处阶段，查阅对应的细分准则文档：
 
 - **阶段一初筛打分与 `reviews.json` 生成规范**：请查阅 [初筛指南 (references/screening.md)](references/screening.md)
-  - 涵盖核心子系统权重、变更性质、RFC 价值评估标准与 JSON Schema（由当前对话中的 Agent 在初筛阶段直接执行并生成 `reviews.json`）。
+  - 涵盖核心子系统权重、变更性质、RFC 价值评估标准与 0-10 分制 JSON Schema（由当前对话中的 Agent 在初筛阶段直接执行并生成 `reviews.json`）。
 - **阶段三深度技术分析 5 大核心维度与报告模板**：请查阅 [深度分析指南 (references/deep-analysis.md)](references/deep-analysis.md)
   - 涵盖：① 背景动机与架构设计、② 锁与并发安全、③ 内存与资源生命周期、④ 潜在回归与性能/兼容性风险、⑤ 社区审阅洞察与争议点，以及标准 Markdown 报告模板（作为 `kp analyze` 外部 Agent 分析子进程遵循的规范与 Prompt 指引）。

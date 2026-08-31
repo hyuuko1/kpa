@@ -11,7 +11,7 @@ def test_skill_files_exist():
     assert "name: kernel-patch-analyzer" in content
     assert "references/screening.md" in content
     assert "references/deep-analysis.md" in content
-    assert "data/runs/<run_id>/reports/<sanitized_id>.md" in content
+    assert "data/reports/" in content
 
     screening_ref = skill_dir / "references" / "screening.md"
     assert screening_ref.is_file(), f"{screening_ref} does not exist"

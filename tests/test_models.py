@@ -103,17 +103,58 @@ def test_run_manifest():
 
 
 def test_patch_review_model():
-    review = PatchReview(id="msg123", score=85, recommend=True, reason="Important fix")
+    review = PatchReview(id="msg123", score=8, recommend=True, reason="Important fix")
     assert review.id == "msg123"
     assert review.title is None
-    assert review.score == 85
+    assert review.score == 8
     assert review.recommend is True
     assert review.reason == "Important fix"
 
     review_with_title = PatchReview(
-        id="msg456", title="[PATCH] Fix mm", score=90, recommend=True, reason="Critical"
+        id="msg456", title="[PATCH] Fix mm", score=9, recommend=True, reason="Critical"
     )
     assert review_with_title.title == "[PATCH] Fix mm"
+
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PatchReview(id="invalid", score=11, recommend=True, reason="Out of range")
+    with pytest.raises(ValidationError):
+        PatchReview(id="invalid", score=-1, recommend=True, reason="Out of range")
+
+
+def test_sqlite_models():
+    from kp.models import PatchsetRecord, PatchsetStatus, QueryCursor, RunRecord
+
+    record = PatchsetRecord(
+        id="test%2Fmsgid@kernel.org",
+        title="[PATCH] fix bug",
+        author="Dev <dev@test.org>",
+        date="2026-08-30T10:00:00Z",
+        total_patches=1,
+        status=PatchsetStatus.FETCHED,
+        score=7,
+        recommend=True,
+    )
+    assert record.id == "test%2Fmsgid@kernel.org"
+    assert record.status == PatchsetStatus.FETCHED
+    assert record.score == 7
+
+    cursor = QueryCursor(
+        query_key="l:netdev@vger.kernel.org",
+        last_sync_time="2026-08-30T10:00:00Z",
+        last_run_id="20260830_100000",
+    )
+    assert cursor.query_key == "l:netdev@vger.kernel.org"
+
+    run = RunRecord(
+        run_id="20260830_100000",
+        query="l:netdev@vger.kernel.org",
+        raw_count=10,
+        patchset_count=2,
+    )
+    assert run.run_id == "20260830_100000"
 
 
 def test_parsed_comment_tree_model():

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
@@ -45,11 +46,11 @@ class RunManifest(BaseModel):
 
 
 class PatchReview(BaseModel):
-    """AI 打分与评审结果项"""
+    """AI 打分与评审结果项 (0-10 分制)"""
 
     id: str  # 补丁集代表性 Message-ID
     title: Optional[str] = None  # 补丁集标题
-    score: int = Field(ge=0, le=100)  # 价值评分 (0-100)
+    score: int = Field(ge=0, le=10)  # 价值评分 (0-10)
     recommend: bool  # 是否推荐深度分析
     reason: str  # 推荐或打分理由
 
@@ -109,7 +110,7 @@ class PatchsetAnalysis(BaseModel):
     """单个补丁集的 AI 深度分析结果元数据"""
 
     msgid: str  # 补丁集代表性 Message-ID
-    sanitized_id: str  # 路径安全标识符
+    sanitized_id: str  # 路径安全标识符 (或 clean_id)
     status: Literal["success", "failed", "skipped"]  # 分析执行状态
     report_path: Optional[Path] = None  # 生成的 Markdown 报告文件路径
     error_message: Optional[str] = None  # 错误信息（若失败）
@@ -127,3 +128,46 @@ class AnalyzeRunResult(BaseModel):
     success_count: int = 0  # 成功总数
     failed_count: int = 0  # 失败总数
     skipped_count: int = 0  # 跳过总数
+
+
+# --- SQLite 实体模型 ---
+
+
+class PatchsetStatus(str, Enum):
+    FETCHED = "fetched"
+    DOWNLOADED = "downloaded"
+    ANALYZED = "analyzed"
+    IGNORED = "ignored"
+
+
+class PatchsetRecord(BaseModel):
+    """SQLite patchsets 表记录实体"""
+
+    id: str  # clean MsgID (剔除尖括号且 / 转为 %2F)
+    title: str  # 补丁集标题
+    author: Optional[str] = None  # 标准 "Name <email>" 格式
+    date: Optional[str] = None  # LKML 邮件发送时间 (ISO8601 UTC)
+    total_patches: int = 1  # 补丁总数
+    status: PatchsetStatus = PatchsetStatus.FETCHED  # 状态
+    score: Optional[int] = Field(default=None, ge=0, le=10)  # 0-10 整数评分
+    recommend: Optional[bool] = None  # 是否推荐
+    review_reason: Optional[str] = None  # 推荐理由
+    downloaded_at: Optional[str] = None  # 最近一次 b4 下载/解包时间 (ISO8601 UTC)
+
+
+class QueryCursor(BaseModel):
+    """SQLite query_cursors 表记录实体"""
+
+    query_key: str  # 规范化 query key
+    last_sync_time: str  # ISO8601 UTC 截止时间戳
+    last_run_id: str  # 最近一次同步的 run_id
+
+
+class RunRecord(BaseModel):
+    """SQLite runs 表记录实体"""
+
+    run_id: str  # 会话 ID
+    query: str  # 执行的查询
+    raw_count: int = 0  # 原始消息数
+    patchset_count: int = 0  # 聚合后补丁集数
+    created_at: Optional[str] = None  # 记录创建时间

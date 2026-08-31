@@ -8,9 +8,12 @@ def test_load_default_config():
     assert isinstance(config, AppConfig)
     assert config.safety.max_time_span_hours == 48
     assert config.safety.require_time_filter is True
+    assert config.safety.chunk_hours == 24
+    assert config.safety.max_catchup_hours == 72
+    assert config.safety.overlap_grace_minutes == 10
     assert config.lore.inbox_url == "https://lore.kernel.org/all/"
     assert config.lore.timeout_seconds == 60
-    assert config.storage.data_dir == "data/runs"
+    assert config.storage.data_dir == "data"
     assert isinstance(config.b4, B4Config)
     assert config.b4.timeout_seconds == 120
 
@@ -51,7 +54,7 @@ timeout_seconds = 45
     config = load_config(config_path=custom_toml)
     assert config.safety.max_time_span_hours == 48
     assert config.lore.timeout_seconds == 45
-    assert config.storage.data_dir == "data/runs"
+    assert config.storage.data_dir == "data"
 
 
 def test_load_config_invalid_toml_fallback(tmp_path: Path):

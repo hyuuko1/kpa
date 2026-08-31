@@ -161,7 +161,7 @@ def test_cli_download_by_id_success(tmp_path: Path):
                 "--id",
                 "id2@test",
                 "--min-score",
-                "85",
+                "8",
             ],
         )
         assert result.exit_code == 0
@@ -173,7 +173,8 @@ def test_cli_download_by_id_success(tmp_path: Path):
             run_id="20260830_120000",
             target_ids=["id1@test", "id2@test"],
             reviews_content=None,
-            min_score=85,
+            min_score=8,
+            force=False,
         )
 
 
@@ -212,7 +213,8 @@ def test_cli_download_by_input_file_success(tmp_path: Path):
             run_id="20260830_120000",
             target_ids=None,
             reviews_content=reviews_content,
-            min_score=70,
+            min_score=7,
+            force=False,
         )
 
 
@@ -220,7 +222,7 @@ def test_cli_download_by_input_stdin_success(tmp_path: Path):
     from kp.core.download_pipeline import DownloadResult
 
     stdin_data = (
-        '[{"id": "msg1@test", "score": 95, "recommend": true, "summary": "excellent"}]'
+        '[{"id": "msg1@test", "score": 9, "recommend": true, "reason": "excellent"}]'
     )
 
     runner = CliRunner()
@@ -250,7 +252,8 @@ def test_cli_download_by_input_stdin_success(tmp_path: Path):
             run_id="20260830_120000",
             target_ids=None,
             reviews_content=stdin_data,
-            min_score=70,
+            min_score=7,
+            force=False,
         )
 
 
@@ -392,6 +395,7 @@ def test_cli_analyze_dry_run_success(tmp_path: Path):
             concurrency=None,
             dry_run=True,
             force=False,
+            custom_prompt=None,
         )
 
 
@@ -442,6 +446,7 @@ def test_cli_analyze_success(tmp_path: Path):
             concurrency=2,
             dry_run=False,
             force=False,
+            custom_prompt=None,
         )
 
 
@@ -571,8 +576,8 @@ def test_cli_analyze_with_skipped_and_force(tmp_path: Path):
 
 
 def test_cli_analyze_missing_kernel_path_error(tmp_path: Path):
-    data_dir = tmp_path / "runs"
-    session_dir = data_dir / "20260830_120000" / "patchsets" / "p1"
+    data_dir = tmp_path
+    session_dir = data_dir / "runs" / "20260830_120000" / "patchsets" / "p1"
     session_dir.mkdir(parents=True)
     (session_dir / "meta.json").write_text('{"msgid": "<p1>"}', encoding="utf-8")
 
@@ -603,3 +608,95 @@ path = ""
         assert result.exit_code == 1
         assert "未配置 Linux 内核代码路径" in result.output
         mock_get_runner.assert_not_called()
+
+
+def test_cli_fetch_since_last_success(tmp_path: Path):
+    from kp.core.pipeline import PipelineResult
+
+    runner = CliRunner()
+    fake_res = PipelineResult(
+        run_id="20260830_120000",
+        raw_count=1,
+        patchset_count=1,
+        run_dir=tmp_path,
+    )
+    with patch("kp.core.pipeline.FetchPipeline.run", return_value=fake_res) as mock_run:
+        result = runner.invoke(main, ["fetch", "--query", "l:linux-mm", "--since-last"])
+        assert result.exit_code == 0
+        assert "增量巡检查询" in result.output
+        assert "抓取完成" in result.output
+        mock_run.assert_called_once_with("l:linux-mm", since_last=True)
+
+
+def test_cli_download_force(tmp_path: Path):
+    from kp.core.download_pipeline import DownloadResult
+
+    runner = CliRunner()
+    fake_result = DownloadResult(
+        run_id="20260830_120000",
+        run_dir=tmp_path,
+        downloaded_count=1,
+    )
+    with patch(
+        "kp.core.download_pipeline.DownloadPipeline.run", return_value=fake_result
+    ) as mock_run:
+        result = runner.invoke(
+            main,
+            ["download", "--run-id", "20260830_120000", "--id", "id1@test", "--force"],
+        )
+        assert result.exit_code == 0
+        mock_run.assert_called_once_with(
+            run_id="20260830_120000",
+            target_ids=["id1@test"],
+            reviews_content=None,
+            min_score=7,
+            force=True,
+        )
+
+
+def test_cli_analyze_custom_prompt(tmp_path: Path):
+    from kp.models import AnalyzeRunResult
+
+    runner = CliRunner()
+    fake_res = AnalyzeRunResult(
+        run_id="20260830_120000",
+        analyses=[],
+        total_count=0,
+        success_count=0,
+        failed_count=0,
+    )
+    with patch(
+        "kp.core.analyze_pipeline.AnalyzePipeline.run", return_value=fake_res
+    ) as mock_run:
+        result = runner.invoke(
+            main,
+            ["analyze", "--run-id", "20260830_120000", "-p", "Check race conditions"],
+        )
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        assert mock_run.call_args[1].get("custom_prompt") == "Check race conditions"
+
+
+def test_cli_analyze_prompt_file(tmp_path: Path):
+    from kp.models import AnalyzeRunResult
+
+    pfile = tmp_path / "prompt.txt"
+    pfile.write_text("Focus on lock correctness", encoding="utf-8")
+    runner = CliRunner()
+    fake_res = AnalyzeRunResult(
+        run_id="20260830_120000",
+        analyses=[],
+        total_count=0,
+        success_count=0,
+        failed_count=0,
+    )
+    with patch(
+        "kp.core.analyze_pipeline.AnalyzePipeline.run", return_value=fake_res
+    ) as mock_run:
+        result = runner.invoke(
+            main,
+            ["analyze", "--run-id", "20260830_120000", "--prompt-file", str(pfile)],
+        )
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        assert mock_run.call_args[1].get("custom_prompt") == "Focus on lock correctness"

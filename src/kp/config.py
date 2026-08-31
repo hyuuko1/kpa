@@ -14,6 +14,9 @@ else:
 class SafetyConfig(BaseModel):
     max_time_span_hours: int = 48
     require_time_filter: bool = True
+    chunk_hours: int = 24
+    max_catchup_hours: int = 72
+    overlap_grace_minutes: int = 10
 
 
 class LoreConfig(BaseModel):
@@ -22,7 +25,7 @@ class LoreConfig(BaseModel):
 
 
 class StorageConfig(BaseModel):
-    data_dir: str = "data/runs"
+    data_dir: str = "data"
 
 
 class B4Config(BaseModel):

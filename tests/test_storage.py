@@ -24,7 +24,7 @@ def test_session_manager_create_session_dir(tmp_path: Path):
 
     assert run_dir.exists()
     assert run_dir.is_dir()
-    assert run_dir.parent == tmp_path
+    assert run_dir.parent == tmp_path / "runs"
     assert re.match(r"^\d{8}_\d{6}$", run_id)
     assert run_dir.name == run_id
 
@@ -98,13 +98,13 @@ def test_session_manager_get_run_dir(tmp_path: Path):
     config = StorageConfig(data_dir=str(tmp_path))
     mgr = SessionManager(config)
     run_dir = mgr.get_run_dir("20260830_120000")
-    assert run_dir == tmp_path / "20260830_120000"
+    assert run_dir == tmp_path / "runs" / "20260830_120000"
 
 
 def test_session_manager_load_patchsets(tmp_path: Path):
     config = StorageConfig(data_dir=str(tmp_path))
     mgr = SessionManager(config)
-    run_dir = tmp_path / "test_run"
+    run_dir = tmp_path / "runs" / "test_run"
     run_dir.mkdir(parents=True)
 
     patchsets_data = [
@@ -130,7 +130,7 @@ def test_session_manager_load_patchsets(tmp_path: Path):
 def test_session_manager_load_patchsets_not_found(tmp_path: Path):
     config = StorageConfig(data_dir=str(tmp_path))
     mgr = SessionManager(config)
-    empty_dir = tmp_path / "empty_run"
+    empty_dir = tmp_path / "runs" / "empty_run"
     empty_dir.mkdir(parents=True)
 
     with pytest.raises(FileNotFoundError):
@@ -140,15 +140,15 @@ def test_session_manager_load_patchsets_not_found(tmp_path: Path):
 def test_session_manager_save_reviews(tmp_path: Path):
     config = StorageConfig(data_dir=str(tmp_path))
     mgr = SessionManager(config)
-    run_dir = tmp_path / "run_rev"
+    run_dir = tmp_path / "runs" / "run_rev"
     run_dir.mkdir(parents=True)
 
     reviews = [
         PatchReview(
-            id="msg1", title="title1", score=90, recommend=True, reason="Great patch"
+            id="msg1", title="title1", score=9, recommend=True, reason="Great patch"
         ),
         PatchReview(
-            id="msg2", title="title2", score=50, recommend=False, reason="Minor tweak"
+            id="msg2", title="title2", score=5, recommend=False, reason="Minor tweak"
         ),
     ]
     filtered_patchsets = [
@@ -171,7 +171,7 @@ def test_session_manager_save_reviews(tmp_path: Path):
 
     loaded_reviews = json.loads(reviews_file.read_text(encoding="utf-8"))
     assert len(loaded_reviews) == 2
-    assert loaded_reviews[0]["score"] == 90
+    assert loaded_reviews[0]["score"] == 9
 
     loaded_filtered = json.loads(filtered_file.read_text(encoding="utf-8"))
     assert len(loaded_filtered) == 1
@@ -181,7 +181,7 @@ def test_session_manager_save_reviews(tmp_path: Path):
 def test_session_manager_save_parsed_patchset(tmp_path: Path):
     config = StorageConfig(data_dir=str(tmp_path))
     mgr = SessionManager(config)
-    run_dir = tmp_path / "run_parsed"
+    run_dir = tmp_path / "runs" / "run_parsed"
     run_dir.mkdir(parents=True)
 
     c1 = ParsedComment(
@@ -197,6 +197,7 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
         cover_letter=ParsedCoverLetter(
             subject="[PATCH 0/1] fix memory leak",
             author="Bob <bob@kernel.org>",
+            date="2026-08-30T10:00:00Z",
             message_id="cover1",
             body="Cover letter description.",
             diffstat="drv.c | 2 +-\n 1 file changed",
@@ -207,6 +208,7 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
                 total=1,
                 subject="[PATCH] fix memory leak",
                 author="Bob <bob@kernel.org>",
+                date="2026-08-30T10:00:00Z",
                 message_id="patch1@domain.org",
                 commit_message="Fix memory leak in driver",
                 trailers=["Signed-off-by: Bob <bob@kernel.org>"],
@@ -216,9 +218,13 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
         ],
     )
 
-    saved_path = mgr.save_parsed_patchset(run_dir, "patch1_domain_org", parsed)
+    saved_path = mgr.save_parsed_patchset(
+        run_dir, "patch1@domain.org", parsed, date_str="2026-08-30T10:00:00Z"
+    )
 
-    expected_path = run_dir / "patchsets" / "patch1_domain_org" / "parsed_series.json"
+    expected_path = (
+        tmp_path / "patchsets" / "2026-08" / "patch1@domain.org" / "parsed_series.json"
+    )
     assert saved_path == expected_path
     assert expected_path.exists()
 
@@ -228,10 +234,11 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
     assert content["patches"][0]["author"] == "Bob <bob@kernel.org>"
 
     # 验证 AI 直读友好型文件
-    meta_file = run_dir / "patchsets" / "patch1_domain_org" / "meta.json"
-    cover_file = run_dir / "patchsets" / "patch1_domain_org" / "00-cover-letter.md"
-    disc_file = run_dir / "patchsets" / "patch1_domain_org" / "discussions.md"
-    patches_dir = run_dir / "patchsets" / "patch1_domain_org" / "patches"
+    patchset_dir = tmp_path / "patchsets" / "2026-08" / "patch1@domain.org"
+    meta_file = patchset_dir / "meta.json"
+    cover_file = patchset_dir / "00-cover-letter.md"
+    disc_file = patchset_dir / "discussions.md"
+    patches_dir = patchset_dir / "patches"
 
     assert meta_file.exists()
     assert cover_file.exists()
@@ -246,7 +253,7 @@ def test_session_manager_save_parsed_patchset(tmp_path: Path):
 def test_session_manager_save_stage3_prompt(tmp_path: Path):
     config = StorageConfig(data_dir=str(tmp_path))
     mgr = SessionManager(config)
-    run_dir = tmp_path / "run_prompt3"
+    run_dir = tmp_path / "runs" / "run_prompt3"
     run_dir.mkdir(parents=True)
 
     prompt_text = "# Stage 3 Deep Analysis\n\nPlease analyze the patches."
@@ -261,16 +268,27 @@ def test_session_manager_save_stage3_prompt(tmp_path: Path):
 def test_session_manager_reports_helpers(tmp_path: Path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-123"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    reports_dir = sm.get_reports_dir(run_id)
-    assert reports_dir.is_dir()
-    assert reports_dir == tmp_path / run_id / "reports"
+    patchsets_data = [
+        {
+            "id": "patchset_1_msgid",
+            "title": "[PATCH] mm: fix bug",
+            "author_name": "Alice",
+            "author_email": "alice@kernel.org",
+            "date": "2026-08-30T10:00:00Z",
+            "patches": ["[PATCH] mm: fix bug"],
+        }
+    ]
+    (run_dir / "patchsets.json").write_text(
+        json.dumps(patchsets_data), encoding="utf-8"
+    )
 
-    report_path = sm.get_report_path(run_id, "patchset_1_msgid")
-    assert report_path == tmp_path / run_id / "reports" / "patchset_1_msgid.md"
+    report_path = sm.get_report_path("patchset_1_msgid", "2026-08-30T10:00:00Z")
+    assert report_path == tmp_path / "reports" / "2026-08" / "patchset_1_msgid.md"
 
     assert sm.list_reports(run_id) == []
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text("# Report", encoding="utf-8")
     assert sm.list_reports(run_id) == [report_path]
 
@@ -278,11 +296,25 @@ def test_session_manager_reports_helpers(tmp_path: Path):
 def test_session_manager_get_downloaded_patchset_dirs(tmp_path: Path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-456"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
     assert sm.get_downloaded_patchset_dirs(run_id) == []
 
-    p1_dir = tmp_path / run_id / "patchsets" / "msg_1"
+    patchsets_data = [
+        {
+            "id": "msg_1",
+            "title": "[PATCH] mm: fix bug",
+            "author_name": "Alice",
+            "author_email": "alice@kernel.org",
+            "date": "2026-08-30T10:00:00Z",
+            "patches": ["[PATCH] mm: fix bug"],
+        }
+    ]
+    (run_dir / "patchsets.json").write_text(
+        json.dumps(patchsets_data), encoding="utf-8"
+    )
+
+    p1_dir = tmp_path / "patchsets" / "2026-08" / "msg_1"
     p1_dir.mkdir(parents=True)
     (p1_dir / "meta.json").write_text("{}", encoding="utf-8")
 

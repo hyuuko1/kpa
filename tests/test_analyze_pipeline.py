@@ -23,12 +23,15 @@ class DummyRunner(BaseAgentRunner):
         report_output_path: Path,
         kernel_path: Path | str | None = None,
         skill_name: str = "kernel-patch-analyzer",
+        custom_prompt: str | None = None,
     ) -> None:
         import time
 
         if self.delay > 0:
             time.sleep(self.delay)
-        self.called_with.append((patchset_dir, report_output_path, kernel_path))
+        self.called_with.append(
+            (patchset_dir, report_output_path, kernel_path, custom_prompt)
+        )
         if self.should_fail:
             raise AgentExecutionError("Analysis failed")
         report_output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,10 +66,10 @@ def test_analyze_pipeline_no_patchsets(tmp_path):
 def test_analyze_pipeline_dry_run_and_integrity_check(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-1"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
     # Valid patchset 1
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
     (p1 / "00-cover-letter.md").write_text("Cover", encoding="utf-8")
@@ -74,12 +77,12 @@ def test_analyze_pipeline_dry_run_and_integrity_check(tmp_path):
     (p1 / "patches" / "0001.patch").write_text("Diff", encoding="utf-8")
 
     # Corrupted patchset 2 (invalid JSON)
-    p2 = tmp_path / run_id / "patchsets" / "msg_2"
+    p2 = run_dir / "patchsets" / "msg_2"
     p2.mkdir(parents=True)
     (p2 / "meta.json").write_text("invalid json content", encoding="utf-8")
 
     # Corrupted patchset 3 (declared cover letter missing)
-    p3 = tmp_path / run_id / "patchsets" / "msg_3"
+    p3 = run_dir / "patchsets" / "msg_3"
     p3.mkdir(parents=True)
     (p3 / "meta.json").write_text(
         '{"msgid": "<msg_3>", "has_cover_letter": true}', encoding="utf-8"
@@ -106,9 +109,9 @@ def test_analyze_pipeline_dry_run_and_integrity_check(tmp_path):
 def test_analyze_pipeline_successful_run(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-2"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
     (p1 / "00-cover-letter.md").write_text("Cover", encoding="utf-8")
@@ -131,9 +134,9 @@ def test_analyze_pipeline_successful_run(tmp_path):
 def test_analyze_pipeline_failed_run(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-fail"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
 
@@ -153,13 +156,13 @@ def test_analyze_pipeline_failed_run(tmp_path):
 def test_analyze_pipeline_target_ids_filtering(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-filter"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
 
-    p2 = tmp_path / run_id / "patchsets" / "msg_2"
+    p2 = run_dir / "patchsets" / "msg_2"
     p2.mkdir(parents=True)
     (p2 / "meta.json").write_text('{"msgid": "<msg_2>"}', encoding="utf-8")
 
@@ -178,9 +181,9 @@ def test_analyze_pipeline_target_ids_filtering(tmp_path):
 def test_analyze_pipeline_target_id_not_found(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-notfound"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
 
@@ -201,10 +204,10 @@ def test_analyze_pipeline_target_id_not_found(tmp_path):
 def test_analyze_pipeline_concurrency(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-concurrent"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
     for i in range(3):
-        p = tmp_path / run_id / "patchsets" / f"msg_{i}"
+        p = run_dir / "patchsets" / f"msg_{i}"
         p.mkdir(parents=True)
         (p / "meta.json").write_text(f'{{"msgid": "<msg_{i}>"}}', encoding="utf-8")
 
@@ -223,9 +226,9 @@ def test_analyze_pipeline_concurrency(tmp_path):
 def test_analyze_pipeline_agent_selection(mock_get_runner, tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-agent"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
 
@@ -244,14 +247,14 @@ def test_analyze_pipeline_agent_selection(mock_get_runner, tmp_path):
 def test_analyze_pipeline_skip_already_analyzed(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-skip"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
 
     # 预先生成报告
-    report_file = tmp_path / run_id / "reports" / "msg_1.md"
+    report_file = sm.get_report_path("msg_1")
     report_file.parent.mkdir(parents=True, exist_ok=True)
     report_file.write_text("# Existing Report", encoding="utf-8")
 
@@ -272,14 +275,14 @@ def test_analyze_pipeline_skip_already_analyzed(tmp_path):
 def test_analyze_pipeline_force_reanalyze(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-force"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
 
     # 预先生成报告
-    report_file = tmp_path / run_id / "reports" / "msg_1.md"
+    report_file = sm.get_report_path("msg_1")
     report_file.parent.mkdir(parents=True, exist_ok=True)
     report_file.write_text("# Old Report", encoding="utf-8")
 
@@ -299,9 +302,9 @@ def test_analyze_pipeline_force_reanalyze(tmp_path):
 def test_analyze_pipeline_missing_kernel_path_raises_error(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-no-kernel"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
     (p1 / "00-cover-letter.md").write_text("Cover", encoding="utf-8")
@@ -329,9 +332,9 @@ def test_analyze_pipeline_missing_kernel_path_raises_error(tmp_path):
 def test_analyze_pipeline_passes_kernel_path_to_runner(tmp_path):
     sm = SessionManager(tmp_path)
     run_id = "test-run-kernel-pass"
-    sm.create_session(run_id)
+    run_dir = sm.create_session(run_id)
 
-    p1 = tmp_path / run_id / "patchsets" / "msg_1"
+    p1 = run_dir / "patchsets" / "msg_1"
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
     (p1 / "00-cover-letter.md").write_text("Cover", encoding="utf-8")
@@ -347,3 +350,28 @@ def test_analyze_pipeline_passes_kernel_path_to_runner(tmp_path):
     assert res.success_count == 1
     assert len(dummy_runner.called_with) == 1
     assert dummy_runner.called_with[0][2] == "/custom/linux/code"
+
+
+def test_analyze_pipeline_passes_custom_prompt(tmp_path):
+    sm = SessionManager(tmp_path)
+    run_id = "test-run-prompt-pass"
+    run_dir = sm.create_session(run_id)
+
+    p1 = run_dir / "patchsets" / "msg_1"
+    p1.mkdir(parents=True)
+    (p1 / "meta.json").write_text('{"msgid": "<msg_1>"}', encoding="utf-8")
+    (p1 / "00-cover-letter.md").write_text("Cover", encoding="utf-8")
+    (p1 / "patches").mkdir()
+
+    cfg = load_config(None)
+    cfg.storage.data_dir = str(tmp_path)
+    cfg.kernel.path = "/custom/linux/code"
+    dummy_runner = DummyRunner(should_fail=False)
+    pipeline = AnalyzePipeline(cfg, sm)
+
+    res = pipeline.run(
+        run_id, custom_prompt="Please check concurrency", runner_override=dummy_runner
+    )
+    assert res.success_count == 1
+    assert len(dummy_runner.called_with) == 1
+    assert dummy_runner.called_with[0][3] == "Please check concurrency"

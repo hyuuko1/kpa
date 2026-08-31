@@ -301,3 +301,43 @@ def test_opencode_runner_timeout(mock_run, mock_which, tmp_path):
     runner = OpenCodeAgentRunner(cmd="opencode", timeout_seconds=15)
     with pytest.raises(AgentTimeoutError, match="Agent analysis timed out after 15s"):
         runner.run_analysis(patchset_dir, report_file)
+
+
+@patch("shutil.which", return_value="/usr/bin/agy")
+@patch("subprocess.run")
+def test_agy_runner_with_custom_prompt(mock_run, mock_which, tmp_path):
+    patchset_dir = tmp_path / "patchset"
+    patchset_dir.mkdir()
+    report_file = tmp_path / "report.md"
+
+    def side_effect(cmd, **kwargs):
+        report_file.write_text("# Agy Report", encoding="utf-8")
+        return MagicMock(returncode=0, stdout="OK", stderr="")
+
+    mock_run.side_effect = side_effect
+
+    runner = AgyAgentRunner(cmd="agy")
+    runner.run_analysis(patchset_dir, report_file, custom_prompt="Focus on lockdep")
+
+    args, _ = mock_run.call_args
+    assert "【用户附加重点关注要求】：\nFocus on lockdep" in args[0][3]
+
+
+@patch("shutil.which", return_value="/usr/bin/opencode")
+@patch("subprocess.run")
+def test_opencode_runner_with_custom_prompt(mock_run, mock_which, tmp_path):
+    patchset_dir = tmp_path / "patchset"
+    patchset_dir.mkdir()
+    report_file = tmp_path / "report.md"
+
+    def side_effect(cmd, **kwargs):
+        report_file.write_text("# OpenCode Report", encoding="utf-8")
+        return MagicMock(returncode=0, stdout="OK", stderr="")
+
+    mock_run.side_effect = side_effect
+
+    runner = OpenCodeAgentRunner(cmd="opencode")
+    runner.run_analysis(patchset_dir, report_file, custom_prompt="Check memory barrier")
+
+    args, _ = mock_run.call_args
+    assert "【用户附加重点关注要求】：\nCheck memory barrier" in args[0][3]

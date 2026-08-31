@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 from pydantic import BaseModel, Field
@@ -9,8 +10,9 @@ from pydantic import BaseModel, Field
 from kp.adapters.b4 import B4Client, B4ExecutionError, B4NotFoundError
 from kp.config import AppConfig
 from kp.core.parser import MboxParser
-from kp.models import ParsedPatchset, PatchReview, Patchset
+from kp.models import ParsedPatchset, PatchReview, Patchset, PatchsetStatus
 from kp.storage.session import SessionManager
+from kp.storage.paths import get_clean_id
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ DownloadRunResult = DownloadResult
 
 
 class DownloadPipeline:
-    """阶段二核心业务流水线：Reviews过滤 / 指定ID -> B4拉取 -> MboxParser清洗 -> SessionStorage持久化"""
+    """阶段二核心业务流水线：Reviews过滤 / 指定ID -> B4拉取 -> MboxParser清洗 -> SessionStorage持久化 + SQLite状态更新"""
 
     def __init__(
         self,
@@ -43,7 +45,7 @@ class DownloadPipeline:
         self.mbox_parser = mbox_parser or MboxParser()
 
     def _parse_reviews(self, reviews_content: str) -> List[PatchReview]:
-        """解析并校验 AI 评审结果 JSON 字符串"""
+        """解析并校验 AI 评审结果 JSON 字符串 (0-10 分制)"""
         text = reviews_content.strip()
         # 处理可能包含的 Markdown 代码块包裹 (如 ```json ... ```)，即使存在前导对话文本
         if "```" in text:
@@ -102,7 +104,8 @@ class DownloadPipeline:
         run_id: str,
         target_ids: Optional[List[str]] = None,
         reviews_content: Optional[str] = None,
-        min_score: int = 70,
+        min_score: int = 7,
+        force: bool = False,
     ) -> DownloadRunResult:
         """执行下载与结构化清洗流水线
 
@@ -110,14 +113,15 @@ class DownloadPipeline:
             run_id: 阶段一会话 ID
             target_ids: 直接指定的 Message-ID 列表 (可选)
             reviews_content: AI 评审结果 JSON 字符串 (可选)
-            min_score: 最低推荐分数阈值 (默认 70)
+            min_score: 最低推荐分数阈值 (默认 7，基于 0-10 分制)
+            force: 是否强制重新下载即使已是最新
 
         Returns:
             DownloadRunResult: 包含下载统计与解析后补丁集列表的结果对象
         """
         run_dir = self.session_manager.get_run_dir(run_id)
         existing_patchsets = self.session_manager.load_patchsets(run_dir)
-        patchset_map = {ps.id.strip("<>"): ps for ps in existing_patchsets}
+        patchset_map = {get_clean_id(ps.id): ps for ps in existing_patchsets}
         for ps in existing_patchsets:
             patchset_map[ps.id] = ps
 
@@ -130,9 +134,14 @@ class DownloadPipeline:
             filtered_patchsets: List[Patchset] = []
 
             for r in reviews:
+                clean_id = get_clean_id(r.id)
+                # 更新 SQLite 中的评分
+                self.session_manager.db.update_patchset_review(
+                    clean_id, r.score, r.recommend, r.reason
+                )
+
                 # 过滤规则：score >= min_score 或 recommend is True
                 if r.score >= min_score or r.recommend is True:
-                    clean_id = r.id.strip("<>")
                     ps = patchset_map.get(r.id) or patchset_map.get(clean_id)
                     if not ps:
                         ps = Patchset(
@@ -151,7 +160,7 @@ class DownloadPipeline:
         # 2. 如果额外/直接指定了 target_ids
         if target_ids:
             for tid in target_ids:
-                clean_id = tid.strip("<>")
+                clean_id = get_clean_id(tid)
                 ps = patchset_map.get(tid) or patchset_map.get(clean_id)
                 if not ps:
                     ps = Patchset(
@@ -164,13 +173,26 @@ class DownloadPipeline:
                     seen_ids.add(ps.id)
                     target_patchsets.append(ps)
 
-        # 3. 逐个调用 b4 下载并解析 mbox
+        # 3. 逐个增量检查并调用 b4 下载与解析 mbox
         parsed_patchsets: List[ParsedPatchset] = []
 
         for ps in target_patchsets:
             patchset_id = ps.id
-            sanitized_id = self.b4_client.sanitize_id(patchset_id)
-            patchset_dir = run_dir / "patchsets" / sanitized_id
+            clean_id = get_clean_id(patchset_id)
+            db_record = self.session_manager.db.get_patchset(clean_id)
+
+            latest_msg_date = ps.date
+            # 增量检查：无 force 且已下载过，且邮件日期不新于已下载时间 -> 跳过
+            if not force and db_record and db_record.downloaded_at:
+                if latest_msg_date and latest_msg_date <= db_record.downloaded_at:
+                    logger.info(
+                        "[SKIP] Patchset %s is up-to-date (downloaded at %s)",
+                        clean_id,
+                        db_record.downloaded_at,
+                    )
+                    continue
+
+            patchset_dir = self.session_manager.get_patchset_dir(ps.id, ps.date)
 
             try:
                 mbox_path = self.b4_client.fetch_thread(
@@ -189,9 +211,34 @@ class DownloadPipeline:
             )
             self.session_manager.save_parsed_patchset(
                 run_dir,
-                sanitized_id,
+                clean_id,
                 parsed_ps,
+                date_str=ps.date,
             )
+
+            now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            report_path = self.session_manager.get_report_path(ps.id, ps.date)
+
+            # 状态流转规则：若原 status 为 ANALYZED 且报告非空存在，保持 ANALYZED，不降级为 DOWNLOADED
+            if (
+                db_record
+                and db_record.status == PatchsetStatus.ANALYZED
+                and report_path.exists()
+                and report_path.stat().st_size > 0
+            ):
+                self.session_manager.db.update_patchset_status(
+                    clean_id, PatchsetStatus.ANALYZED, downloaded_at=now_iso
+                )
+                logger.info(
+                    "[UPDATED] Downloaded new replies for analyzed patchset %s. Discussions updated at %s",
+                    clean_id,
+                    patchset_dir,
+                )
+            else:
+                self.session_manager.db.update_patchset_status(
+                    clean_id, PatchsetStatus.DOWNLOADED, downloaded_at=now_iso
+                )
+
             parsed_patchsets.append(parsed_ps)
 
         return DownloadRunResult(
