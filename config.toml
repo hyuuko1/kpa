@@ -9,3 +9,11 @@ require_time_filter = true
 inbox_url = "https://lore.kernel.org/all/"
 # lei 命令执行超时时间（秒）
 timeout_seconds = 60
+
+[agent]
+default = "agy"
+agy_cmd = "agy"
+opencode_cmd = "opencode"
+timeout_seconds = 600
+concurrency = 1
+

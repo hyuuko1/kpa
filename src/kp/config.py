@@ -29,12 +29,20 @@ class B4Config(BaseModel):
     timeout_seconds: int = 120
 
 
+class AgentConfig(BaseModel):
+    default: str = "agy"
+    agy_cmd: str = "agy"
+    opencode_cmd: str = "opencode"
+    timeout_seconds: int = 600
+    concurrency: int = 1
+
+
 class AppConfig(BaseModel):
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     lore: LoreConfig = Field(default_factory=LoreConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     b4: B4Config = Field(default_factory=B4Config)
-
+    agent: AgentConfig = Field(default_factory=AgentConfig)
 
 
 def load_config(config_path: Optional[Path] = None) -> AppConfig:
@@ -66,4 +74,3 @@ def load_config(config_path: Optional[Path] = None) -> AppConfig:
                 continue
 
     return AppConfig()
-

@@ -30,6 +30,7 @@ def test_raw_message_parsing():
     assert msg.c is None
     assert msg.rt is None
 
+
 def test_raw_message_optional_fields():
     raw_dict = {
         "blob": "abcdef123456",
@@ -47,6 +48,7 @@ def test_raw_message_optional_fields():
     assert msg.t == [["Recipient", "to@example.com"]]
     assert msg.c == [["Reviewer", "cc@example.com"]]
     assert msg.refs == []
+
 
 def test_patchset_structure():
     patchset = Patchset(
@@ -66,6 +68,7 @@ def test_patchset_structure():
     assert patchset.author_email == "john@example.com"
     assert len(patchset.patches) == 2
     assert patchset.patches[0] == "[PATCH 1/2] mm: sample fix 1"
+
 
 def test_patchset_defaults():
     patchset = Patchset(
@@ -179,3 +182,56 @@ def test_parsed_patchset_model():
     assert patchset.general_comments == []
     assert len(patchset.patches) == 1
 
+
+def test_patchset_analysis_model():
+    from pathlib import Path
+    from kp.models import PatchsetAnalysis, AnalyzeRunResult
+
+    analysis = PatchsetAnalysis(
+        msgid="<test@example.com>",
+        sanitized_id="test_example_com",
+        status="success",
+        report_path=Path("data/runs/123/reports/test_example_com.md"),
+        duration_seconds=12.5,
+    )
+    assert analysis.msgid == "<test@example.com>"
+    assert analysis.sanitized_id == "test_example_com"
+    assert analysis.status == "success"
+    assert analysis.report_path == Path("data/runs/123/reports/test_example_com.md")
+    assert analysis.error_message is None
+    assert analysis.duration_seconds == 12.5
+
+    # Test defaults
+    analysis_default = PatchsetAnalysis(
+        msgid="<test2@example.com>",
+        sanitized_id="test2_example_com",
+        status="failed",
+        error_message="Agent execution timeout",
+    )
+    assert analysis_default.report_path is None
+    assert analysis_default.error_message == "Agent execution timeout"
+    assert analysis_default.duration_seconds == 0.0
+
+    run_result = AnalyzeRunResult(
+        run_id="run-1",
+        analyses=[analysis, analysis_default],
+        total_count=2,
+        success_count=1,
+        failed_count=1,
+    )
+    assert run_result.run_id == "run-1"
+    assert len(run_result.analyses) == 2
+    assert run_result.total_count == 2
+    assert run_result.success_count == 1
+    assert run_result.failed_count == 1
+
+    # Check defaults and serialization
+    empty_result = AnalyzeRunResult(run_id="run-empty")
+    assert empty_result.analyses == []
+    assert empty_result.total_count == 0
+    assert empty_result.success_count == 0
+    assert empty_result.failed_count == 0
+
+    dumped = run_result.model_dump()
+    loaded = AnalyzeRunResult.model_validate(dumped)
+    assert loaded == run_result
