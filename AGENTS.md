@@ -22,7 +22,7 @@
 > 任何 Agent 在本仓库进行任何功能开发、接口变动、数据模型演进或存储格式调整时，**必须自主同步维护并更新设计文档**，严禁留待用户提醒。
 
 ### 自主维护执行规则：
-1. **主设计文档**: [`docs/design.md`](file:///code/agent/kp/docs/design.md) 是全系统的单一事实来源（Single Source of Truth）。
+1. **主设计文档**: [`docs/design.md`](docs/design.md) 是全系统的单一事实来源（Single Source of Truth）。
 2. **触发更新的时机**:
    - 修改或新增数据模型（`src/kp/models.py`）；
    - 修改或新增 CLI 命令与参数选项（`src/kp/cli.py`）；
@@ -63,9 +63,9 @@
 
 ## 5. 关键文件与上下文索引 (Context Pointers)
 
-- **系统设计与架构全景**: [`docs/design.md`](file:///code/agent/kp/docs/design.md)
-- **阶段一设计规范**: [`docs/superpowers/specs/2026-08-30-patch-analyzer-stage1-design.md`](file:///code/agent/kp/docs/superpowers/specs/2026-08-30-patch-analyzer-stage1-design.md)
-- **阶段二设计规范**: [`docs/superpowers/specs/2026-08-30-patch-analyzer-stage2-design.md`](file:///code/agent/kp/docs/superpowers/specs/2026-08-30-patch-analyzer-stage2-design.md)
-- **数据模型定义**: [`src/kp/models.py`](file:///code/agent/kp/src/kp/models.py)
-- **CLI 命令定义**: [`src/kp/cli.py`](file:///code/agent/kp/src/kp/cli.py)
-- **会话与持久化管理**: [`src/kp/storage/session.py`](file:///code/agent/kp/src/kp/storage/session.py)
+- **系统设计与架构全景**: [`docs/design.md`](docs/design.md)
+- **阶段一设计规范**: [`docs/superpowers/specs/2026-08-30-patch-analyzer-stage1-design.md`](docs/superpowers/specs/2026-08-30-patch-analyzer-stage1-design.md)
+- **阶段二设计规范**: [`docs/superpowers/specs/2026-08-30-patch-analyzer-stage2-design.md`](docs/superpowers/specs/2026-08-30-patch-analyzer-stage2-design.md)
+- **数据模型定义**: [`src/kp/models.py`](src/kp/models.py)
+- **CLI 命令定义**: [`src/kp/cli.py`](src/kp/cli.py)
+- **会话与持久化管理**: [`src/kp/storage/session.py`](src/kp/storage/session.py)
