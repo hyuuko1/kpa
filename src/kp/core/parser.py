@@ -3,6 +3,7 @@ from __future__ import annotations
 import email
 from email.header import decode_header, make_header
 import email.message
+import json
 import mailbox
 from pathlib import Path
 import re
@@ -14,6 +15,7 @@ from kp.models import (
     ParsedCoverLetter,
     ParsedPatch,
     ParsedPatchset,
+    PatchReview,
 )
 
 
@@ -400,3 +402,59 @@ class MboxParser:
             patches=patches,
             general_comments=general_comments,
         )
+
+
+def parse_reviews(reviews_content: str) -> List[PatchReview]:
+    """解析并校验 AI 评审结果 JSON 字符串 (0-10 分制)
+
+    支持标准 JSON 数组、包含 'reviews' 键的字典，以及被 Markdown 代码块包裹的 JSON。
+    """
+    text = reviews_content.strip()
+    if "```" in text:
+        start_idx = text.find("```")
+        end_idx = text.rfind("```")
+        if end_idx > start_idx:
+            inner = text[start_idx + 3 : end_idx].strip()
+        else:
+            inner = text[start_idx + 3 :].strip()
+
+        lines = inner.splitlines()
+        if lines and lines[0].strip().lower() in (
+            "json",
+            "jsonc",
+            "javascript",
+            "js",
+            "text",
+        ):
+            inner = "\n".join(lines[1:]).strip()
+        elif lines and not lines[0].strip().startswith(("{", "[")) and len(lines) > 1:
+            inner = "\n".join(lines[1:]).strip()
+        text = inner
+
+    try:
+        raw_data = json.loads(text)
+    except Exception as e:
+        raise ValueError(f"解析 AI 评审结果 JSON 失败: {e}") from e
+
+    if (
+        isinstance(raw_data, dict)
+        and "reviews" in raw_data
+        and isinstance(raw_data["reviews"], list)
+    ):
+        items = raw_data["reviews"]
+    elif isinstance(raw_data, list):
+        items = raw_data
+    else:
+        raise ValueError(
+            "AI 评审结果 JSON 格式不符合规范：必须为评审列表或包含 'reviews' 键的字典"
+        )
+
+    reviews: List[PatchReview] = []
+    for idx, item in enumerate(items):
+        try:
+            review = PatchReview.model_validate(item)
+            reviews.append(review)
+        except Exception as e:
+            raise ValueError(f"AI 评审结果第 {idx + 1} 项数据格式错误: {e}") from e
+
+    return reviews

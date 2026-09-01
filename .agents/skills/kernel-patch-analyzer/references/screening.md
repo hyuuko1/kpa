@@ -52,7 +52,6 @@
 [
   {
     "id": "<patchset_id>",
-    "title": "<patchset_title>",
     "score": 8,
     "recommend": true,
     "reason": "简要说明推荐/分析理由"
@@ -61,8 +60,8 @@
 ```
 
 ### 字段说明
-- `id` (string, 必需): 对应 `patchsets.json` 中的 `id` 或 `msgid`
-- `title` (string, 必需): 补丁集标题
+- `id` (string, 必需): 对应 `patchsets.json` 中的 `id` 或 `msgid` (全局唯一 Message-ID)
 - `score` (integer, 必需): 0 到 10 之间的整数评分
 - `recommend` (boolean, 必需): 是否推荐下载并进入后续深度分析 (建议分值 >= 7 时设为 `true`)
 - `reason` (string, 必需): 简明扼要的推荐或不推荐理由
+

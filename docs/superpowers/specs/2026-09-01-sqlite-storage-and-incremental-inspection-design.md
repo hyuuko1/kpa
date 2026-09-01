@@ -265,7 +265,6 @@ data_dir = "data"              # 数据总根目录 (含 kp.db, patchsets/, repo
    ```python
    class PatchReview(BaseModel):
        id: str
-       title: Optional[str] = None
        score: int = Field(ge=0, le=10)  # 0-10 整数分制
        recommend: bool
        reason: str

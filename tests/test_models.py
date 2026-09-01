@@ -105,15 +105,9 @@ def test_run_manifest():
 def test_patch_review_model():
     review = PatchReview(id="msg123", score=8, recommend=True, reason="Important fix")
     assert review.id == "msg123"
-    assert review.title is None
     assert review.score == 8
     assert review.recommend is True
     assert review.reason == "Important fix"
-
-    review_with_title = PatchReview(
-        id="msg456", title="[PATCH] Fix mm", score=9, recommend=True, reason="Critical"
-    )
-    assert review_with_title.title == "[PATCH] Fix mm"
 
     import pytest
     from pydantic import ValidationError

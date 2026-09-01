@@ -64,7 +64,6 @@ from pydantic import BaseModel, Field
 class PatchReview(BaseModel):
     """AI 打分与评审结果项"""
     id: str                                                 # 补丁集代表性 Message-ID
-    title: Optional[str] = None                             # 补丁集标题
     score: int = Field(ge=0, le=100)                        # 价值评分 (0-100)
     recommend: bool                                         # 是否推荐深度分析
     reason: str                                             # 推荐或打分理由

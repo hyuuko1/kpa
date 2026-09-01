@@ -100,6 +100,19 @@ def test_patchset_upsert_and_status(tmp_path: Path):
     assert reviewed.recommend is True
     assert reviewed.review_reason == "High quality"
 
+    import pytest
+
+    with pytest.raises(
+        ValueError,
+        match="更新评审打分失败：数据库中未找到 Patchset 'nonexistent_id'，请检查 ID 是否正确",
+    ):
+        db.update_patchset_review(
+            id="nonexistent_id",
+            score=5,
+            recommend=False,
+            reason="not found",
+        )
+
     # Update status to downloaded
     db.update_patchset_status(
         id="test_id_1@kernel.org",

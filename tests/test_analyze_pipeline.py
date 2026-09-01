@@ -375,7 +375,24 @@ def test_analyze_pipeline_without_run_id_by_reviews(tmp_path):
     p1.mkdir(parents=True)
     (p1 / "meta.json").write_text('{"msgid": "<rev_ps1@kernel.org>"}', encoding="utf-8")
     (p1 / "00-cover-letter.md").write_text("Cover", encoding="utf-8")
-    (p1 / "patches").mkdir()
+    from kp.models import PatchsetRecord, PatchsetStatus
+
+    sm.db.upsert_patchset(
+        PatchsetRecord(
+            id="rev_ps1@kernel.org",
+            title="rev ps1",
+            status=PatchsetStatus.FETCHED,
+            total_patches=1,
+        )
+    )
+    sm.db.upsert_patchset(
+        PatchsetRecord(
+            id="rev_ps2@kernel.org",
+            title="rev ps2",
+            status=PatchsetStatus.FETCHED,
+            total_patches=1,
+        )
+    )
 
     cfg = load_config(None)
     cfg.storage.data_dir = str(tmp_path)
@@ -405,6 +422,33 @@ def test_analyze_pipeline_without_run_id_by_reviews(tmp_path):
     assert res.total_count == 1
     assert res.success_count == 1
     assert res.analyses[0].sanitized_id == "rev_ps1@kernel.org"
+
+
+def test_analyze_pipeline_wrong_id_in_reviews_fails(tmp_path):
+    import json
+    import pytest
+
+    sm = SessionManager(tmp_path)
+    cfg = load_config(None)
+    cfg.storage.data_dir = str(tmp_path)
+    cfg.kernel.path = "/custom/linux/code"
+    pipeline = AnalyzePipeline(cfg, sm)
+
+    reviews_json = json.dumps(
+        [
+            {
+                "id": "nonexistent_ps@kernel.org",
+                "score": 9,
+                "recommend": True,
+                "reason": "urgent",
+            }
+        ]
+    )
+    with pytest.raises(
+        ValueError,
+        match="更新评审打分失败：数据库中未找到 Patchset 'nonexistent_ps@kernel.org'，请检查 ID 是否正确",
+    ):
+        pipeline.run(reviews_content=reviews_json, min_score=7)
 
 
 def test_analyze_pipeline_not_downloaded_fails(tmp_path):

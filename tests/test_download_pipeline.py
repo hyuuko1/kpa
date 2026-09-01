@@ -10,7 +10,14 @@ from kp.adapters.b4 import B4Client, B4ExecutionError
 from kp.config import AppConfig, B4Config, StorageConfig
 from kp.core.download_pipeline import DownloadPipeline, DownloadResult
 from kp.core.parser import MboxParser
-from kp.models import ParsedPatch, ParsedPatchset, Patchset
+from kp.models import (
+    ParsedPatch,
+    ParsedPatchset,
+    Patchset,
+    PatchsetRecord,
+    PatchsetStatus,
+)
+from kp.storage.paths import get_clean_id
 from kp.storage.session import SessionManager
 
 
@@ -50,6 +57,18 @@ def mock_env(tmp_path):
             ],
         ),
     ]
+
+    for ps in patchsets:
+        clean_id = get_clean_id(ps.id)
+        session_manager.db.upsert_patchset(
+            PatchsetRecord(
+                id=clean_id,
+                title=ps.title,
+                author=f"{ps.author_name} <{ps.author_email}>",
+                total_patches=len(ps.patches),
+                status=PatchsetStatus.FETCHED,
+            )
+        )
 
     return {
         "config": config,
@@ -419,45 +438,66 @@ def test_download_pipeline_invalid_item_in_reviews(mock_env):
     assert "格式错误" in str(exc_info.value) or "规范" in str(exc_info.value)
 
 
-def test_download_pipeline_b4_failure_resilient(mock_env):
+def test_download_pipeline_b4_failure_raises_error(mock_env):
     config = mock_env["config"]
     session_manager = mock_env["session_manager"]
 
     mock_b4 = MagicMock(spec=B4Client)
     mock_b4.sanitize_id.side_effect = lambda msgid: B4Client.sanitize_id(msgid)
-
-    # 第一个失败，第二个成功
-    def side_effect_fetch(msgid, output_dir, mbox_name="series.mbx"):
-        if msgid == "patch1@example.com":
-            raise B4ExecutionError("b4 mbox failed: 404 not found on lore")
-        p = Path(output_dir) / mbox_name
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("From xxx\n", encoding="utf-8")
-        return p
-
-    mock_b4.fetch_thread.side_effect = side_effect_fetch
-
-    mock_parser = MagicMock(spec=MboxParser)
-    mock_parser.parse.return_value = ParsedPatchset(
-        id="patch2@example.com",
-        title="net patch",
-        total_patches=1,
+    mock_b4.fetch_thread.side_effect = B4ExecutionError(
+        "b4 mbox failed: 404 not found on lore"
     )
 
     pipeline = DownloadPipeline(
         config=config,
         b4_client=mock_b4,
         session_manager=session_manager,
-        mbox_parser=mock_parser,
     )
 
-    result = pipeline.run(
-        target_ids=["patch1@example.com", "patch2@example.com"],
+    import pytest
+
+    with pytest.raises(
+        B4ExecutionError,
+        match="下载 Patchset 'patch1@example.com' 失败，请检查 ID 是否正确",
+    ):
+        pipeline.run(
+            target_ids=["patch1@example.com"],
+        )
+
+
+def test_download_pipeline_wrong_id_in_reviews_fails(mock_env):
+    config = mock_env["config"]
+    session_manager = mock_env["session_manager"]
+
+    mock_b4 = MagicMock(spec=B4Client)
+    mock_b4.sanitize_id.side_effect = lambda msgid: B4Client.sanitize_id(msgid)
+
+    pipeline = DownloadPipeline(
+        config=config,
+        b4_client=mock_b4,
+        session_manager=session_manager,
     )
 
-    # 虽然 patch1 失败，但 patch2 成功，不阻断
-    assert result.downloaded_count == 1
-    assert result.parsed_patchsets[0].id == "patch2@example.com"
+    import json
+    import pytest
+
+    reviews_data = [
+        {
+            "id": "bad_typo_id@example.com",
+            "score": 9,
+            "recommend": True,
+            "reason": "Good patch",
+        }
+    ]
+
+    # 当 reviews.json 中出现数据库不存在的 typo ID 时，更新打分时直接抛出 ValueError 拦截
+    with pytest.raises(
+        ValueError,
+        match="更新评审打分失败：数据库中未找到 Patchset 'bad_typo_id@example.com'，请检查 ID 是否正确",
+    ):
+        pipeline.run(
+            reviews_content=json.dumps(reviews_data),
+        )
 
 
 def test_download_pipeline_empty_targets(mock_env):
@@ -491,20 +531,20 @@ def test_download_pipeline_without_run_id_by_target_id(tmp_path):
     mock_b4.fetch_thread.side_effect = fake_fetch
     mock_parser = MagicMock(spec=MboxParser)
     mock_parser.parse.return_value = ParsedPatchset(
-        id="standalone@kernel.org",
-        title="standalone fix",
+        id="direct@kernel.org",
+        title="direct patch",
         total_patches=1,
     )
 
     pipeline = DownloadPipeline(
         config=config, b4_client=mock_b4, mbox_parser=mock_parser
     )
-    result = pipeline.run(target_ids=["standalone@kernel.org"])
+    result = pipeline.run(target_ids=["direct@kernel.org"])
 
     assert result.downloaded_count == 1
-    assert result.parsed_patchsets[0].id == "standalone@kernel.org"
+    assert result.parsed_patchsets[0].id == "direct@kernel.org"
     # Verify saved in global patchsets directory
-    patchset_dir = pipeline.session_manager.find_patchset_dir("standalone@kernel.org")
+    patchset_dir = pipeline.session_manager.find_patchset_dir("direct@kernel.org")
     assert patchset_dir is not None
     assert (patchset_dir / "meta.json").exists()
 
@@ -531,6 +571,24 @@ def test_download_pipeline_without_run_id_by_reviews(tmp_path):
     pipeline = DownloadPipeline(
         config=config, b4_client=mock_b4, mbox_parser=mock_parser
     )
+    # Pre-populate DB records from fetch phase
+    pipeline.session_manager.db.upsert_patchset(
+        PatchsetRecord(
+            id="rev1@kernel.org",
+            title="reviewed fix",
+            status=PatchsetStatus.FETCHED,
+            total_patches=1,
+        )
+    )
+    pipeline.session_manager.db.upsert_patchset(
+        PatchsetRecord(
+            id="rev2@kernel.org",
+            title="low fix",
+            status=PatchsetStatus.FETCHED,
+            total_patches=1,
+        )
+    )
+
     reviews_json = json.dumps(
         [
             {"id": "rev1@kernel.org", "score": 9, "recommend": True, "reason": "great"},

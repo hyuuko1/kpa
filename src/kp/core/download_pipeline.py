@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -8,8 +7,8 @@ from pydantic import BaseModel, Field
 
 from kp.adapters.b4 import B4Client, B4ExecutionError, B4NotFoundError
 from kp.config import AppConfig
-from kp.core.parser import MboxParser
-from kp.models import ParsedPatchset, PatchReview, Patchset, PatchsetStatus
+from kp.core.parser import MboxParser, parse_reviews
+from kp.models import ParsedPatchset, Patchset, PatchsetStatus
 from kp.storage.session import SessionManager
 from kp.storage.paths import get_clean_id
 
@@ -41,60 +40,7 @@ class DownloadPipeline:
         self.session_manager = session_manager or SessionManager(config.storage)
         self.mbox_parser = mbox_parser or MboxParser()
 
-    def _parse_reviews(self, reviews_content: str) -> List[PatchReview]:
-        """解析并校验 AI 评审结果 JSON 字符串 (0-10 分制)"""
-        text = reviews_content.strip()
-        # 处理可能包含的 Markdown 代码块包裹 (如 ```json ... ```)，即使存在前导对话文本
-        if "```" in text:
-            start_idx = text.find("```")
-            end_idx = text.rfind("```")
-            if end_idx > start_idx:
-                inner = text[start_idx + 3 : end_idx].strip()
-            else:
-                inner = text[start_idx + 3 :].strip()
-
-            lines = inner.splitlines()
-            if lines and lines[0].strip().lower() in (
-                "json",
-                "jsonc",
-                "javascript",
-                "js",
-                "text",
-            ):
-                inner = "\n".join(lines[1:]).strip()
-            elif (
-                lines and not lines[0].strip().startswith(("{", "[")) and len(lines) > 1
-            ):
-                inner = "\n".join(lines[1:]).strip()
-            text = inner
-
-        try:
-            raw_data = json.loads(text)
-        except Exception as e:
-            raise ValueError(f"解析 AI 评审结果 JSON 失败: {e}") from e
-
-        if (
-            isinstance(raw_data, dict)
-            and "reviews" in raw_data
-            and isinstance(raw_data["reviews"], list)
-        ):
-            items = raw_data["reviews"]
-        elif isinstance(raw_data, list):
-            items = raw_data
-        else:
-            raise ValueError(
-                "AI 评审结果 JSON 格式不符合规范：必须为评审列表或包含 'reviews' 键的字典"
-            )
-
-        reviews: List[PatchReview] = []
-        for idx, item in enumerate(items):
-            try:
-                review = PatchReview.model_validate(item)
-                reviews.append(review)
-            except Exception as e:
-                raise ValueError(f"AI 评审结果第 {idx + 1} 项数据格式错误: {e}") from e
-
-        return reviews
+    _parse_reviews = staticmethod(parse_reviews)
 
     def run(
         self,
@@ -124,7 +70,7 @@ class DownloadPipeline:
                 clean_id = get_clean_id(r.id)
                 # 更新 SQLite 中的评分
                 self.session_manager.db.update_patchset_review(
-                    clean_id, r.score, r.recommend, r.reason, title=r.title
+                    clean_id, r.score, r.recommend, r.reason
                 )
 
                 # 过滤规则：score >= min_score 或 recommend is True
@@ -132,7 +78,7 @@ class DownloadPipeline:
                     db_record = self.session_manager.db.get_patchset(clean_id)
                     ps = Patchset(
                         id=r.id,
-                        title=r.title or (db_record.title if db_record else r.id),
+                        title=(db_record.title if db_record else r.id),
                         author_name=(db_record.author or "") if db_record else "",
                         author_email="",
                         date=(db_record.date if db_record else None),
@@ -184,9 +130,12 @@ class DownloadPipeline:
                     patchset_dir,
                     mbox_name="series.mbx",
                 )
-            except (B4ExecutionError, B4NotFoundError) as e:
-                logger.warning("下载 Patchset %s 失败: %s", patchset_id, e)
-                continue
+            except B4NotFoundError:
+                raise
+            except B4ExecutionError as e:
+                raise B4ExecutionError(
+                    f"下载 Patchset '{patchset_id}' 失败，请检查 ID 是否正确: {e}"
+                ) from e
 
             parsed_ps = self.mbox_parser.parse(
                 mbox_path,

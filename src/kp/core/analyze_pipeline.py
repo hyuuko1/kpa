@@ -9,10 +9,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from kp.adapters.agent import BaseAgentRunner, get_agent_runner
 from kp.config import AppConfig
+from kp.core.parser import parse_reviews
 from kp.storage.paths import get_clean_id
 from kp.models import (
     AnalyzeRunResult,
-    PatchReview,
     PatchsetAnalysis,
     PatchsetStatus,
 )
@@ -32,59 +32,7 @@ class AnalyzePipeline:
         self.config = config
         self.session_manager = session_manager or SessionManager(config.storage)
 
-    def _parse_reviews(self, reviews_content: str) -> List[PatchReview]:
-        """解析并校验 AI 评审结果 JSON 字符串 (0-10 分制)"""
-        text = reviews_content.strip()
-        if "```" in text:
-            start_idx = text.find("```")
-            end_idx = text.rfind("```")
-            if end_idx > start_idx:
-                inner = text[start_idx + 3 : end_idx].strip()
-            else:
-                inner = text[start_idx + 3 :].strip()
-
-            lines = inner.splitlines()
-            if lines and lines[0].strip().lower() in (
-                "json",
-                "jsonc",
-                "javascript",
-                "js",
-                "text",
-            ):
-                inner = "\n".join(lines[1:]).strip()
-            elif (
-                lines and not lines[0].strip().startswith(("{", "[")) and len(lines) > 1
-            ):
-                inner = "\n".join(lines[1:]).strip()
-            text = inner
-
-        try:
-            raw_data = json.loads(text)
-        except Exception as e:
-            raise ValueError(f"解析 AI 评审结果 JSON 失败: {e}") from e
-
-        if (
-            isinstance(raw_data, dict)
-            and "reviews" in raw_data
-            and isinstance(raw_data["reviews"], list)
-        ):
-            items = raw_data["reviews"]
-        elif isinstance(raw_data, list):
-            items = raw_data
-        else:
-            raise ValueError(
-                "AI 评审结果 JSON 格式不符合规范：必须为评审列表或包含 'reviews' 键的字典"
-            )
-
-        reviews: List[PatchReview] = []
-        for idx, item in enumerate(items):
-            try:
-                review = PatchReview.model_validate(item)
-                reviews.append(review)
-            except Exception as e:
-                raise ValueError(f"AI 评审结果第 {idx + 1} 项数据格式错误: {e}") from e
-
-        return reviews
+    _parse_reviews = staticmethod(parse_reviews)
 
     def _verify_patchset_integrity(
         self, patchset_dir: Path
@@ -154,7 +102,7 @@ class AnalyzePipeline:
             for r in reviews:
                 clean_id = get_clean_id(r.id)
                 self.session_manager.db.update_patchset_review(
-                    clean_id, r.score, r.recommend, r.reason, title=r.title
+                    clean_id, r.score, r.recommend, r.reason
                 )
                 if r.score >= min_score or r.recommend is True:
                     if clean_id not in seen_clean_ids:

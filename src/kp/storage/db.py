@@ -234,24 +234,25 @@ class DatabaseManager:
         score: Optional[int],
         recommend: Optional[bool],
         reason: Optional[str] = None,
-        title: Optional[str] = None,
     ) -> None:
         with self.get_connection() as conn:
             recommend_val = None
             if recommend is not None:
                 recommend_val = 1 if recommend else 0
-            conn.execute(
+            cur = conn.execute(
                 """
-                INSERT INTO patchsets (id, title, score, recommend, review_reason, status)
-                VALUES (?, ?, ?, ?, ?, 'fetched')
-                ON CONFLICT(id) DO UPDATE SET
-                    score = excluded.score,
-                    recommend = excluded.recommend,
-                    review_reason = excluded.review_reason,
-                    title = CASE WHEN excluded.title != excluded.id THEN excluded.title ELSE patchsets.title END;
+                UPDATE patchsets
+                SET score = ?,
+                    recommend = ?,
+                    review_reason = ?
+                WHERE id = ?;
                 """,
-                (id, title or id, score, recommend_val, reason),
+                (score, recommend_val, reason, id),
             )
+            if cur.rowcount == 0:
+                raise ValueError(
+                    f"更新评审打分失败：数据库中未找到 Patchset '{id}'，请检查 ID 是否正确"
+                )
             conn.commit()
 
     def update_patchset_status(
@@ -259,7 +260,6 @@ class DatabaseManager:
         id: str,
         status: PatchsetStatus,
         downloaded_at: Optional[str] = None,
-        title: Optional[str] = None,
     ) -> None:
         with self.get_connection() as conn:
             conn.execute(
@@ -270,6 +270,11 @@ class DatabaseManager:
                     status = excluded.status,
                     downloaded_at = COALESCE(excluded.downloaded_at, patchsets.downloaded_at);
                 """,
-                (id, title or id, status.value, downloaded_at),
+                (
+                    id,
+                    id,
+                    status.value if isinstance(status, PatchsetStatus) else status,
+                    downloaded_at,
+                ),
             )
             conn.commit()

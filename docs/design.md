@@ -88,11 +88,11 @@
 
 ### 阶段二：AI 评审打分接入、完整拉取与直读拆解 (Download & Parse)
 1. **输入**：`kp download [--input reviews.json | --id <MSG_ID>] [--min-score 7] [--force]`（要求必须至少指定 `--id` 或 `-i/--input`，否则报错退出）。
-2. **过滤**：解析 AI 评审结果（0-10 分制，自动宽容提取 Markdown 代码块），过滤推荐项（`score >= min_score or recommend is True`），直接更新 SQLite 评分与推荐状态。
+2. **过滤**：解析 AI 评审结果（0-10 分制，自动宽容提取 Markdown 代码块），更新 SQLite 评分与推荐状态（若 ID 在数据库中不存在则直接阻断报错提示检查 ID），过滤推荐项（`score >= min_score or recommend is True`）。
 3. **增量防重检查**：
    - 若未加 `--force` 且 `latest_msg_date <= db_record.downloaded_at`，自动跳过重复下载。
 4. **下载与解包**：
-   - `B4Client` 调用 `b4 mbox` 拉取完整线程至全局目录 `data/patchsets/YYYY-MM/<clean_id>/series.mbx`。
+   - `B4Client` 调用 `b4 mbox` 拉取完整线程至全局目录 `data/patchsets/YYYY-MM/<clean_id>/series.mbx`（若拉取失败或 ID 错误，直接阻断退出并报错提示用户检查 Message-ID）。
    - `MboxParser` 提取 Cover Letter、Patches (commit message, trailers, diff) 与递归回复评论树 (`ParsedComment`)。
    - `formatters` 生成全局直读文件：`00-cover-letter.md`、`discussions.md`、`patches/0001-xxx.patch` 及轻量索引 `meta.json`。
 5. **状态流转与更新**：
@@ -159,7 +159,7 @@ data/
 | `src/kp/adapters/b4.py` | `B4Client` | `b4 mbox` 外部调用、超时控制与 MsgID 安全转义，记录完整执行命令行日志 |
 | `src/kp/adapters/agent.py` | `BaseAgentRunner`, `AgyAgentRunner`, `OpenCodeAgentRunner`, `get_agent_runner` | 外部 AI Agent (agy / opencode) 子进程调用、自定义提示词注入、产物后置校验与完整执行命令行日志 |
 | `src/kp/core/aggregator.py` | `PatchsetAggregator` | 邮件主题正则解析、并查集线程聚合与代表 ID 提取 |
-| `src/kp/core/parser.py` | `MboxParser` | Mbox 邮件解析、Git Trailers 提取、评论树环路检测与树形还原 |
+| `src/kp/core/parser.py` | `MboxParser`, `parse_reviews` | Mbox 邮件解析、Git Trailers 提取、评论树环路检测与树形还原、AI 评审 JSON 提取与校验 |
 | `src/kp/core/formatters.py` | `render_cover_letter_md`, `render_discussions_md`, `render_patch_file`, `render_meta_json` | AI 直读友好型 Markdown 与 Patch 文件生成 |
 | `src/kp/core/pipeline.py` | `FetchPipeline` | 阶段一流水线编排 (支持 `--since-last` 增量巡检与大跨度 Auto-chunking) |
 | `src/kp/core/download_pipeline.py`| `DownloadPipeline` | 阶段二流水线编排 (支持 0-10 分制、增量防重跳过与状态流转) |

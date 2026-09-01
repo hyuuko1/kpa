@@ -410,3 +410,45 @@ Comment B pointing to A.
     # Since neither points to p1, they get mounted safely
     total_comments = len(parsed.patches[0].comments) + len(parsed.general_comments)
     assert total_comments >= 1
+
+
+def test_parse_reviews():
+    from kp.core.parser import parse_reviews
+    import pytest
+
+    # 1. 简化的 4 字段标准列表 (无需 title)
+    json_str = """
+    [
+        {"id": "msg1@kernel.org", "score": 8, "recommend": true, "reason": "Good patch"},
+        {"id": "msg2@kernel.org", "score": 4, "recommend": false, "reason": "Typo fix"}
+    ]
+    """
+    reviews = parse_reviews(json_str)
+    assert len(reviews) == 2
+    assert reviews[0].id == "msg1@kernel.org"
+    assert reviews[0].score == 8
+    assert reviews[0].recommend is True
+    assert reviews[1].id == "msg2@kernel.org"
+    assert reviews[1].score == 4
+
+    # 2. 嵌套在 {"reviews": [...]} 中且带有 Markdown 代码块包裹
+    fenced_content = """Here are the reviews:
+    ```json
+    {
+        "reviews": [
+            {"id": "msg4@kernel.org", "score": 7, "recommend": true, "reason": "Nice"}
+        ]
+    }
+    ```
+    """
+    reviews = parse_reviews(fenced_content)
+    assert len(reviews) == 1
+    assert reviews[0].id == "msg4@kernel.org"
+
+    # 4. 非法 JSON 抛出 ValueError
+    with pytest.raises(ValueError, match="解析 AI 评审结果 JSON 失败"):
+        parse_reviews("invalid json")
+
+    # 5. 数据格式不合规抛出 ValueError
+    with pytest.raises(ValueError, match="AI 评审结果 JSON 格式不符合规范"):
+        parse_reviews('{"foo": "bar"}')
