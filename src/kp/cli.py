@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import logging
 import sys
 from pathlib import Path
 from typing import Tuple
@@ -21,9 +20,26 @@ from kp.core.analyze_pipeline import AnalyzePipeline
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="指定配置文件路径",
 )
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    help="显示详细调试日志 (DEBUG 级别)",
+)
 @click.pass_context
-def main(ctx: click.Context, config_path: Path | None) -> None:
+def main(
+    ctx: click.Context,
+    config_path: Path | None,
+    verbose: bool = False,
+) -> None:
     """Linux Kernel Patch Fetcher & AI Analyzer (kp)"""
+    log_level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
+    )
     ctx.ensure_object(dict)
     ctx.obj["config"] = load_config(config_path)
 
@@ -33,7 +49,7 @@ def main(ctx: click.Context, config_path: Path | None) -> None:
     "-q",
     "--query",
     required=True,
-    help='lei 查询语句 (与 lei q 一致，如 "l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago..")',
+    help='lei 查询语句 (与 lei q 一致，如 "l:linux-mm.kvack.org AND NOT s:Re AND dt:2.hours.ago..")',
 )
 @click.option(
     "--since-last",

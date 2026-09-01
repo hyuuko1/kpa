@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import shlex
 import shutil
 import subprocess
 from datetime import datetime, timezone
 from typing import List
 from kp.config import LoreConfig, SafetyConfig
 from kp.models import RawMessage
+
+logger = logging.getLogger(__name__)
 
 
 class SafetyValidationError(Exception):
@@ -29,13 +33,13 @@ class SafetyValidator:
         self.config = config
 
     def validate_query(self, query: str) -> None:
-        # 提取 d: 条件
-        # 匹配形如 d:2.hours.ago.. 或 d:2026-08-30T10:00:00Z.. 或 d:2026-08-30T10:00:00Z..2026-08-30T18:00:00Z
-        match = re.search(r"\bd:([^\s\"]+)", query)
+        # 提取 dt: 条件 (精确日期时间范围过滤)
+        # 匹配形如 dt:2.hours.ago.. 或 dt:2026-08-30T10:00:00Z.. 或 dt:2026-08-30T10:00:00Z..2026-08-30T18:00:00Z
+        match = re.search(r"\bdt:([^\s\"]+)", query)
         if not match:
             if self.config.require_time_filter:
                 raise SafetyValidationError(
-                    "安全限制：Query 中必须包含 d: 时间范围过滤（例如 d:2.hours.ago..）"
+                    "安全限制：Query 中必须包含 dt: 时间范围过滤（例如 dt:2.hours.ago..）"
                 )
             return
 
@@ -85,7 +89,7 @@ class SafetyValidator:
                 span_hours = float(val * 24)
             else:
                 raise SafetyValidationError(
-                    f"安全限制：禁止使用大粒度时间单位 '{unit}'，最多允许 {self.config.max_time_span_hours} 小时 (如 d:48.hours.ago..)"
+                    f"安全限制：禁止使用大粒度时间单位 '{unit}'，最多允许 {self.config.max_time_span_hours} 小时 (如 dt:48.hours.ago..)"
                 )
 
             if span_hours > self.config.max_time_span_hours:
@@ -114,7 +118,7 @@ class SafetyValidator:
         except ValueError:
             # 无法解析的特殊 approxidate 格式，若不是明显合法则进行提示
             raise SafetyValidationError(
-                f"安全限制：无法识别的时间格式 '{expr}'，请使用 d:X.hours.ago.. 或标准 ISO 时间"
+                f"安全限制：无法识别的时间格式 '{expr}'，请使用 dt:X.hours.ago.. 或标准 ISO 时间"
             )
 
 
@@ -143,6 +147,7 @@ class LoreClient:
             "-f",
             "json",
         ]
+        logger.info("Executing command: %s", shlex.join(cmd))
 
         try:
             res = subprocess.run(

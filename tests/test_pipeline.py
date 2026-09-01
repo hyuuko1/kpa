@@ -22,7 +22,7 @@ def test_fetch_pipeline_run(tmp_path: Path):
     ]
 
     with patch.object(pipeline.lore_client, "query", return_value=fake_raw):
-        result = pipeline.run("l:linux-mm AND d:1.hours.ago..")
+        result = pipeline.run("l:linux-mm AND dt:1.hours.ago..")
         assert isinstance(result, PipelineResult)
         assert result.raw_count == 1
         assert result.patchset_count == 1
@@ -36,7 +36,7 @@ def test_fetch_pipeline_run(tmp_path: Path):
             (result.run_dir / "manifest.json").read_text(encoding="utf-8")
         )
         assert manifest_data["run_id"] == result.run_id
-        assert manifest_data["query"] == "l:linux-mm AND d:1.hours.ago.."
+        assert manifest_data["query"] == "l:linux-mm AND dt:1.hours.ago.."
         assert manifest_data["total_raw_messages"] == 1
         assert manifest_data["total_patchsets"] == 1
 
@@ -47,7 +47,7 @@ def test_fetch_pipeline_empty_query(tmp_path: Path):
     pipeline = FetchPipeline(config)
 
     with patch.object(pipeline.lore_client, "query", return_value=[]):
-        result = pipeline.run("l:linux-mm AND d:1.hours.ago..")
+        result = pipeline.run("l:linux-mm AND dt:1.hours.ago..")
         assert result.raw_count == 0
         assert result.patchset_count == 0
         assert (result.run_dir / "manifest.json").exists()
@@ -89,7 +89,7 @@ def test_fetch_pipeline_multi_patchset(tmp_path: Path):
     ]
 
     with patch.object(pipeline.lore_client, "query", return_value=fake_raw):
-        result = pipeline.run("l:linux-mm AND d:1.hours.ago..")
+        result = pipeline.run("l:linux-mm AND dt:1.hours.ago..")
         assert result.raw_count == 4
         assert result.patchset_count == 2
 

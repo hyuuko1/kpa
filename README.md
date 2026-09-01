@@ -23,7 +23,7 @@
   - 杜绝生成几万行嵌套转义字符串的深层单 JSON 文件；
   - 自动生成 `00-cover-letter.md`、`discussions.md`（论坛式 `>` 引用排版）与 `patches/*.patch`，AI Agent 直接使用文件查看工具阅读，**零 Python 脚本提取开销**。
 - **安全受控**：
-  - 内置 `SafetyValidator` 强制校验查询时间跨度不得超过 48 小时（解析 `d:` 条件）。
+  - 内置 `SafetyValidator` 强制校验查询时间跨度不得超过 48 小时（解析 `dt:` 条件，且使用日期时间时需有 `AND` 连接）。
 - **强类型与高测试覆盖**：
   - 基于 Pydantic v2 进行严格数据建模与强类型校验；
   - 150+ 单元与集成测试 100% 通过（TDD 驱动开发）。
@@ -59,12 +59,12 @@ uv sync
 
 ```bash
 # 查询最近 2 小时 linux-mm 邮件列表中的新补丁集
-uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago.."
+uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND dt:2.hours.ago.."
 ```
 
 执行后将输出会话 ID 与会话目录：
 ```text
-[*] 执行查询: l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago..
+[*] 执行查询: l:linux-mm.kvack.org AND NOT s:Re AND dt:2.hours.ago..
 [✓] 抓取完成！
     - 运行 ID: 20260830_141211
     - 原始邮件数: 35
@@ -181,7 +181,7 @@ data/runs/<run_id>/
 [safety]
 # 最大允许查询时间跨度（小时），默认 48 小时
 max_time_span_hours = 48
-# 是否强制要求 query 必须包含 d: 时间范围
+# 是否强制要求 query 必须包含 dt: 时间范围
 require_time_filter = true
 
 [lore]

@@ -21,7 +21,7 @@ def test_cli_fetch_success(tmp_path: Path):
     ]
     with patch("kp.adapters.lore.LoreClient.query", return_value=fake_raw):
         result = runner.invoke(
-            main, ["fetch", "--query", "l:linux-mm AND d:2.hours.ago.."]
+            main, ["fetch", "--query", "l:linux-mm AND dt:2.hours.ago.."]
         )
         assert result.exit_code == 0
         assert "抓取完成" in result.output
@@ -34,11 +34,11 @@ def test_cli_fetch_success(tmp_path: Path):
 def test_cli_fetch_safety_violation():
     runner = CliRunner()
     # Big granularity prohibited
-    result = runner.invoke(main, ["fetch", "--query", "l:linux-mm AND d:1.week.ago.."])
+    result = runner.invoke(main, ["fetch", "--query", "l:linux-mm AND dt:1.week.ago.."])
     assert result.exit_code != 0
     assert "安全限制" in result.output
 
-    # Missing d: filter prohibited
+    # Missing dt: filter prohibited
     result2 = runner.invoke(main, ["fetch", "--query", "l:linux-mm.kvack.org"])
     assert result2.exit_code != 0
     assert "安全限制" in result2.output
@@ -51,7 +51,7 @@ def test_cli_fetch_lore_error():
         side_effect=LoreExecutionError("lei execution failed"),
     ):
         result = runner.invoke(
-            main, ["fetch", "--query", "l:linux-mm AND d:1.hours.ago.."]
+            main, ["fetch", "--query", "l:linux-mm AND dt:1.hours.ago.."]
         )
         assert result.exit_code == 1
         assert "lei execution failed" in result.output
@@ -64,7 +64,7 @@ def test_cli_fetch_unexpected_error():
         side_effect=RuntimeError("unexpected disk error"),
     ):
         result = runner.invoke(
-            main, ["fetch", "--query", "l:linux-mm AND d:1.hours.ago.."]
+            main, ["fetch", "--query", "l:linux-mm AND dt:1.hours.ago.."]
         )
         assert result.exit_code == 1
         assert "未知错误: unexpected disk error" in result.output
@@ -106,7 +106,7 @@ data_dir = "{custom_data_dir.as_posix()}"
                 str(config_file),
                 "fetch",
                 "-q",
-                "l:linux-mm AND d:30.minutes.ago..",
+                "l:linux-mm AND dt:30.minutes.ago..",
             ],
         )
         assert result.exit_code == 0
@@ -723,3 +723,21 @@ def test_cli_analyze_prompt_file(tmp_path: Path):
         assert result.exit_code == 0
         mock_run.assert_called_once()
         assert mock_run.call_args[1].get("custom_prompt") == "Focus on lock correctness"
+
+
+def test_cli_verbose_logging(tmp_path: Path):
+    from kp.core.pipeline import PipelineResult
+
+    runner = CliRunner()
+    fake_res = PipelineResult(
+        run_id="20260830_120000",
+        raw_count=1,
+        patchset_count=1,
+        run_dir=tmp_path,
+    )
+    with patch("kp.core.pipeline.FetchPipeline.run", return_value=fake_res):
+        result = runner.invoke(
+            main, ["-v", "fetch", "--query", "l:linux-mm AND dt:2.hours.ago.."]
+        )
+        assert result.exit_code == 0
+        assert "抓取完成" in result.output

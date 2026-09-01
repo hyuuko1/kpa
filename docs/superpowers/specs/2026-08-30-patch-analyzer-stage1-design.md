@@ -11,7 +11,7 @@
    - 使用 Python 3.10+ 原生类型与 Pydantic，避免繁重的 ORM 与无用依赖。
    - `prompt.md` 引用清洗后数据的绝对路径，不内嵌大量数据，节约上下文开销。
 3. **安全受控**：
-   - 测试与日常运行时严格实施安全过滤，单次查询时间跨度不得超过 3 小时（解析 `d:` 条件）。
+   - 测试与日常运行时严格实施安全过滤，单次查询时间跨度不得超过 48 小时（解析 `dt:` 条件，且使用日期时间时需有 `AND` 连接）。
 
 ---
 
@@ -59,7 +59,7 @@
 [safety]
 # 最大允许查询时间跨度（分钟），默认 180 分钟（3 小时）
 max_time_span_minutes = 180
-# 是否强制要求 query 必须包含 d: 时间范围
+# 是否强制要求 query 必须包含 dt: 时间范围
 require_time_filter = true
 
 [lore]
@@ -149,16 +149,16 @@ class RunManifest(BaseModel):
 ### 5.1 安全时间校验规则 (`SafetyValidator`)
 在调用 `lei q` 之前，必须对 `--query` 参数进行安全解析，并结合配置项 `SafetyConfig` 进行校验：
 1. **强制存在时间过滤**：
-   - 若 `require_time_filter=True`，检查 query 中是否包含 `d:` 过滤语法（如 `d:2.hours.ago..`、`d:90.minutes.ago..`）。
-   - 若未提供 `d:` 条件，立即抛出 `SafetyValidationError`，阻止拉取全量数据。
+   - 若 `require_time_filter=True`，检查 query 中是否包含 `dt:` 过滤语法（如 `dt:2.hours.ago..`、`dt:90.minutes.ago..`）。
+   - 若未提供 `dt:` 条件，立即抛出 `SafetyValidationError`，阻止拉取全量数据。
 2. **时间跨度限制**：
    - **相对时间语法**：
-     - `d:X.hours.ago..`：校验 $X \le \text{max\_time\_span\_hours}$（默认 48 小时）；
-     - `d:X.minutes.ago..`：校验 $X / 60 \le \text{max\_time\_span\_hours}$；
-     - `d:X.days.ago..`：校验 $X \times 24 \le \text{max\_time\_span\_hours}$；
+     - `dt:X.hours.ago..`：校验 $X \le \text{max\_time\_span\_hours}$（默认 48 小时）；
+     - `dt:X.minutes.ago..`：校验 $X / 60 \le \text{max\_time\_span\_hours}$；
+     - `dt:X.days.ago..`：校验 $X \times 24 \le \text{max\_time\_span\_hours}$；
      - 禁止使用 `week`, `month`, `year` 等大粒度跨度（除非配置放宽限制）。
    - **绝对时间语法**：
-     - `d:YYYY-MM-DDTHH:MM:SSZ..`：计算与当前时间的跨度，必须 $\le \text{max\_time\_span\_hours}$。
+     - `dt:YYYY-MM-DDTHH:MM:SSZ..`：计算与当前时间的跨度，必须 $\le \text{max\_time\_span\_hours}$。
    - 超出限制一律抛出 `SafetyValidationError`，并输出明确友好的修复提示。
 
 
@@ -211,10 +211,10 @@ class RunManifest(BaseModel):
 
 ### 8.1 自动化测试 (`pytest`)
 - `test_config.py`：测试 TOML 配置文件加载、默认值回退与环境覆盖。
-- `test_safety.py`：测试各种合法与非法 query 格式（缺失 d:、超过配置跨度限制、合规时间等）。
+- `test_safety.py`：测试各种合法与非法 query 格式（缺失 dt:、超过配置跨度限制、合规时间等）。
 - `test_aggregator.py`：使用真实的 lore 邮件样本测试 Cover Letter、分卷补丁、独立补丁的聚合准确性。
 - `test_storage.py`：测试会话目录创建与 JSON/MD 文件读写。
 - `test_pipeline.py`：使用 Mock 测试端到端 Pipeline 流程。
 
 ### 8.2 真实环境端到端验证
-- 使用 `uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND d:15.minutes.ago.."` 执行实际抓取，检查 `data/runs/` 下生成的文件内容完整性。
+- 使用 `uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND dt:15.minutes.ago.."` 执行实际抓取，检查 `data/runs/` 下生成的文件内容完整性。

@@ -78,7 +78,7 @@
    - 提取规范化 `query_key`，从 SQLite 表 `query_cursors` 检索上次抓取的时间游标 `last_seen_date`；
    - 结合 10 分钟 Grace Period 计算起始时间，最大追赶窗口为 72 小时；
    - 若时间跨度超过分片大小（`chunk_hours = 24`），自动划分为多个 `[chunk_start..chunk_end]` 连续区间，按时间正序分批抓取并即时更新游标。
-3. **安全校验**：`SafetyValidator` 校验查询跨度 <= 48 小时。
+3. **安全校验**：`SafetyValidator` 校验查询跨度 <= 48 小时（解析 `dt:` 表达式，且使用日期时间时需有 `AND` 连接）。
 4. **抓取**：`LoreClient` 执行 `lei q -t -f json` 拉取原始邮件元数据。
 5. **聚合**：`PatchsetAggregator` 通过并查集（Union-Find）聚合邮件线程，提取代表性 Message-ID 与补丁清单。
 6. **持久化**：
@@ -155,9 +155,9 @@ data/
 | `src/kp/models.py` | `RawMessage`, `Patchset`, `PatchReview` (0-10分), `ParsedComment`, `ParsedPatch`, `ParsedCoverLetter`, `ParsedPatchset`, `PatchsetAnalysis`, `AnalyzeRunResult`, `RunManifest`, `PatchsetStatus`, `PatchsetRecord`, `QueryCursor`, `RunRecord` | 全局强类型 Pydantic 数据模型 |
 | `src/kp/storage/paths.py` | `get_clean_id`, `get_month_bucket`, `get_patchset_dir`, `get_report_path` | 路径计算纯函数体系，统一 Message-ID 清洗与全局分桶路径 |
 | `src/kp/storage/db.py` | `DatabaseManager` | SQLite 数据库连接池、WAL 模式、表结构初始化与游标/运行/补丁集状态 CRUD/UPSERT |
-| `src/kp/adapters/lore.py` | `LoreClient`, `SafetyValidator` | `lei q` 外部调用与时间跨度（<=48h / 区间校验）强制安全拦截 |
-| `src/kp/adapters/b4.py` | `B4Client` | `b4 mbox` 外部调用、超时控制与 MsgID 安全转义 |
-| `src/kp/adapters/agent.py` | `BaseAgentRunner`, `AgyAgentRunner`, `OpenCodeAgentRunner`, `get_agent_runner` | 外部 AI Agent (agy / opencode) 子进程调用、自定义提示词注入与产物后置校验 |
+| `src/kp/adapters/lore.py` | `LoreClient`, `SafetyValidator` | `lei q` 外部调用与时间跨度（<=48h / 区间校验）强制安全拦截，记录完整执行命令行日志 |
+| `src/kp/adapters/b4.py` | `B4Client` | `b4 mbox` 外部调用、超时控制与 MsgID 安全转义，记录完整执行命令行日志 |
+| `src/kp/adapters/agent.py` | `BaseAgentRunner`, `AgyAgentRunner`, `OpenCodeAgentRunner`, `get_agent_runner` | 外部 AI Agent (agy / opencode) 子进程调用、自定义提示词注入、产物后置校验与完整执行命令行日志 |
 | `src/kp/core/aggregator.py` | `PatchsetAggregator` | 邮件主题正则解析、并查集线程聚合与代表 ID 提取 |
 | `src/kp/core/parser.py` | `MboxParser` | Mbox 邮件解析、Git Trailers 提取、评论树环路检测与树形还原 |
 | `src/kp/core/formatters.py` | `render_cover_letter_md`, `render_discussions_md`, `render_patch_file`, `render_meta_json` | AI 直读友好型 Markdown 与 Patch 文件生成 |
@@ -165,7 +165,7 @@ data/
 | `src/kp/core/download_pipeline.py`| `DownloadPipeline` | 阶段二流水线编排 (支持 0-10 分制、增量防重跳过与状态流转) |
 | `src/kp/core/analyze_pipeline.py` | `AnalyzePipeline` | 阶段三流水线编排 (支持全局报告库、防重跳过、自定义提示词与并发调度) |
 | `src/kp/storage/session.py` | `SessionManager` | 持有 `DatabaseManager`，统一管理全局补丁集资产、报告与 `runs/` 执行日志持久化 |
-| `src/kp/cli.py` | `main`, `fetch_cmd`, `download_cmd`, `analyze_cmd` | Click CLI 用户命令行接口 (支持 `--since-last`, `--force`, `-p / --prompt`, `--prompt-file`) |
+| `src/kp/cli.py` | `main`, `fetch_cmd`, `download_cmd`, `analyze_cmd` | Click CLI 用户命令行接口 (全局支持 `-v / --verbose` 详细调试日志与统一日志格式化；支持 `--since-last`, `--force`, `-p / --prompt`, `--prompt-file`) |
 | `.agents/skills/kernel-patch-analyzer/` | `SKILL.md`, `references/` | 统一项目级 Skill (渐进式披露引导全流程，0-10 分制初筛与深度技术分析) |
 
 ---

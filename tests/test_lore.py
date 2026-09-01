@@ -1,3 +1,4 @@
+import logging
 import pytest
 from unittest.mock import patch, MagicMock
 import subprocess
@@ -5,7 +6,7 @@ from kp.config import LoreConfig, SafetyConfig
 from kp.adapters.lore import LoreClient, LoreExecutionError
 
 
-def test_lore_client_success():
+def test_lore_client_success(caplog: pytest.LogCaptureFixture):
     fake_json = '[{"m":"m1@test","s":"[PATCH] test","f":[["A","a@b.com"]],"dt":"2026-08-30T10:00:00Z"}]'
     lore_config = LoreConfig(
         inbox_url="https://lore.kernel.org/all/", timeout_seconds=10
@@ -16,9 +17,10 @@ def test_lore_client_success():
     with (
         patch("shutil.which", return_value="/usr/bin/lei"),
         patch("subprocess.run") as mock_run,
+        caplog.at_level(logging.INFO),
     ):
         mock_run.return_value = MagicMock(returncode=0, stdout=fake_json, stderr="")
-        results = client.query("l:linux-mm.kvack.org AND d:2.hours.ago..")
+        results = client.query("l:linux-mm.kvack.org AND dt:2.hours.ago..")
         assert len(results) == 1
         assert results[0].m == "m1@test"
         assert results[0].s == "[PATCH] test"
@@ -30,10 +32,14 @@ def test_lore_client_success():
             "-t",
             "-I",
             "https://lore.kernel.org/all/",
-            "l:linux-mm.kvack.org AND d:2.hours.ago..",
+            "l:linux-mm.kvack.org AND dt:2.hours.ago..",
             "-f",
             "json",
         ]
+        assert (
+            "Executing command: lei q -t -I https://lore.kernel.org/all/" in caplog.text
+        )
+        assert "l:linux-mm.kvack.org AND dt:2.hours.ago.." in caplog.text
 
 
 def test_lore_client_lei_not_found():
@@ -43,7 +49,7 @@ def test_lore_client_lei_not_found():
 
     with patch("shutil.which", return_value=None):
         with pytest.raises(LoreExecutionError, match="未找到 lei 工具"):
-            client.query("l:linux-mm.kvack.org AND d:2.hours.ago..")
+            client.query("l:linux-mm.kvack.org AND dt:2.hours.ago..")
 
 
 def test_lore_client_timeout():
@@ -59,7 +65,7 @@ def test_lore_client_timeout():
         ),
     ):
         with pytest.raises(LoreExecutionError, match="lei 查询超时"):
-            client.query("l:linux-mm.kvack.org AND d:2.hours.ago..")
+            client.query("l:linux-mm.kvack.org AND dt:2.hours.ago..")
 
 
 def test_lore_client_nonzero_exit():
@@ -77,7 +83,7 @@ def test_lore_client_nonzero_exit():
         with pytest.raises(
             LoreExecutionError, match="lei 查询失败 \\(code 1\\): network error"
         ):
-            client.query("l:linux-mm.kvack.org AND d:2.hours.ago..")
+            client.query("l:linux-mm.kvack.org AND dt:2.hours.ago..")
 
 
 def test_lore_client_empty_output():
@@ -90,7 +96,7 @@ def test_lore_client_empty_output():
         patch("subprocess.run") as mock_run,
     ):
         mock_run.return_value = MagicMock(returncode=0, stdout="  \n", stderr="")
-        results = client.query("l:linux-mm.kvack.org AND d:2.hours.ago..")
+        results = client.query("l:linux-mm.kvack.org AND dt:2.hours.ago..")
         assert results == []
 
 
@@ -107,4 +113,4 @@ def test_lore_client_invalid_json():
             returncode=0, stdout="not valid json", stderr=""
         )
         with pytest.raises(LoreExecutionError, match="解析 lei 返回的 JSON 失败"):
-            client.query("l:linux-mm.kvack.org AND d:2.hours.ago..")
+            client.query("l:linux-mm.kvack.org AND dt:2.hours.ago..")

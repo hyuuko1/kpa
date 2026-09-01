@@ -78,9 +78,9 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 
 `kp fetch` 底层调用 `lei q`。构建查询语句时必须遵循以下规则与最佳实践：
 
-1. **强制安全时间跨度限制**：查询条件中**必须**包含 `d:` 时间过滤（除非启用 `--since-last`，此时系统会自动注入时间区间）。
-   - 相对时间：`d:2.hours.ago..`、`d:24.hours.ago..`、`d:48.hours.ago..`、`d:1.day.ago..`
-   - 绝对时间：`d:2026-08-31T08:00..2026-08-31T10:00`
+1. **强制安全时间跨度限制**：查询条件中**必须**包含 `dt:` 时间过滤（除非启用 `--since-last`，此时系统会自动注入时间区间）。使用日期时间时，应确保有 `AND` 连接 `dt:` 语句。
+   - 相对时间：`dt:2.hours.ago..`、`dt:24.hours.ago..`、`dt:48.hours.ago..`、`dt:1.day.ago..`
+   - 绝对时间：`dt:2026-08-31T08:00:00Z..2026-08-31T10:00:00Z`
 2. **过滤回复邮件**：建议始终加上 `NOT s:Re`，避免拉取重复的单封回复邮件。
 3. **子系统过滤两大核心范式 (List vs. Diff Path)**：
    - **范式 A：独立邮件列表 (`l:`)** —— 适用于有**独立专用邮件列表**的子系统：
@@ -103,13 +103,13 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 | 用户自然语言意图 | 推荐的 `kp fetch` 命令 |
 |---|---|
 | “增量巡检内存管理子系统的新补丁” | `uv run kp fetch -q "l:linux-mm.kvack.org AND NOT s:Re" --since-last` |
-| “分析过去两小时内存管理子系统的改动” | `uv run kp fetch -q "l:linux-mm.kvack.org AND NOT s:Re AND d:2.hours.ago.."` |
-| “查看最近1小时网络子系统 netdev 补丁” | `uv run kp fetch -q "l:netdev@vger.kernel.org AND NOT s:Re AND d:1.hours.ago.."` |
-| “检索过去2小时内调度子系统 (Scheduler) 的补丁” | `uv run kp fetch -q "(dfn:kernel/sched OR dfn:include/linux/sched) AND NOT s:Re AND d:2.hours.ago.."` |
-| “抓取过去2小时内核锁与同步机制 (Locking) 补丁” | `uv run kp fetch -q "(dfn:kernel/locking OR dfn:include/linux/lockdep) AND NOT s:Re AND d:2.hours.ago.."` |
-| “查看过去2小时 RCU 子系统的补丁集” | `uv run kp fetch -q "(dfn:kernel/rcu OR dfn:include/linux/rcu) AND NOT s:Re AND d:2.hours.ago.."` |
-| “抓取过去90分钟 BPF 的补丁集” | `uv run kp fetch -q "l:bpf@vger.kernel.org AND NOT s:Re AND d:90.minutes.ago.."` |
-| “分析过去2小时文件系统 (VFS/FS) 补丁” | `uv run kp fetch -q "l:linux-fsdevel@vger.kernel.org AND NOT s:Re AND d:2.hours.ago.."` |
+| “分析过去两小时内存管理子系统的改动” | `uv run kp fetch -q "l:linux-mm.kvack.org AND NOT s:Re AND dt:2.hours.ago.."` |
+| “查看最近1小时网络子系统 netdev 补丁” | `uv run kp fetch -q "l:netdev@vger.kernel.org AND NOT s:Re AND dt:1.hours.ago.."` |
+| “检索过去2小时内调度子系统 (Scheduler) 的补丁” | `uv run kp fetch -q "(dfn:kernel/sched OR dfn:include/linux/sched) AND NOT s:Re AND dt:2.hours.ago.."` |
+| “抓取过去2小时内核锁与同步机制 (Locking) 补丁” | `uv run kp fetch -q "(dfn:kernel/locking OR dfn:include/linux/lockdep) AND NOT s:Re AND dt:2.hours.ago.."` |
+| “查看过去2小时 RCU 子系统的补丁集” | `uv run kp fetch -q "(dfn:kernel/rcu OR dfn:include/linux/rcu) AND NOT s:Re AND dt:2.hours.ago.."` |
+| “抓取过去90分钟 BPF 的补丁集” | `uv run kp fetch -q "l:bpf@vger.kernel.org AND NOT s:Re AND dt:90.minutes.ago.."` |
+| “分析过去2小时文件系统 (VFS/FS) 补丁” | `uv run kp fetch -q "l:linux-fsdevel@vger.kernel.org AND NOT s:Re AND dt:2.hours.ago.."` |
 
 ---
 

@@ -26,10 +26,10 @@ def mock_pipeline(tmp_path: Path):
 
 
 def test_clean_query_key(mock_pipeline: FetchPipeline):
-    q1 = "l:netdev@vger.kernel.org AND d:2.hours.ago.. AND NOT s:Re"
+    q1 = "l:netdev@vger.kernel.org AND dt:2.hours.ago.. AND NOT s:Re"
     assert mock_pipeline.clean_query_key(q1) == "l:netdev@vger.kernel.org AND NOT s:Re"
 
-    q2 = "  d:2026-08-30T10:00:00Z..   l:linux-mm   "
+    q2 = "  dt:2026-08-30T10:00:00Z..   l:linux-mm   "
     assert mock_pipeline.clean_query_key(q2) == "l:linux-mm"
 
     q3 = "l:linux-fsdevel"
@@ -97,8 +97,11 @@ def test_fetch_since_last_existing_cursor(mock_pipeline: FetchPipeline):
     res = mock_pipeline.run("l:netdev@vger.kernel.org AND NOT s:Re", since_last=True)
     assert res.raw_count == 1
     assert len(captured_queries) == 1
-    # Query must contain d:
-    assert "d:" in captured_queries[0]
+    # Query must contain AND dt:
+    assert " AND dt:" in captured_queries[0]
+    assert captured_queries[0].startswith(
+        "l:netdev@vger.kernel.org AND NOT s:Re AND dt:"
+    )
 
     updated_cursor = mock_pipeline.session_manager.db.get_cursor(
         "l:netdev@vger.kernel.org AND NOT s:Re"
@@ -159,3 +162,19 @@ def test_fetch_since_last_max_catchup_cap(mock_pipeline: FetchPipeline):
     mock_pipeline.run("l:netdev@vger.kernel.org", since_last=True)
 
     assert len(captured_queries) == 3
+
+
+def test_fetch_since_last_empty_query_key(mock_pipeline: FetchPipeline):
+    # Query is only a dt filter, so query_key is empty
+    captured_queries = []
+
+    def mock_query(q):
+        captured_queries.append(q)
+        return []
+
+    mock_pipeline.lore_client.query = mock_query
+    mock_pipeline.run("dt:2.hours.ago..", since_last=True)
+
+    assert len(captured_queries) == 1
+    assert captured_queries[0].startswith("dt:")
+    assert "AND" not in captured_queries[0]

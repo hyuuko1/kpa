@@ -1,3 +1,4 @@
+import logging
 import subprocess
 from unittest.mock import MagicMock, patch
 import pytest
@@ -71,7 +72,9 @@ def test_agy_runner_executable_not_found(tmp_path):
 
 @patch("shutil.which", return_value="/usr/bin/agy")
 @patch("subprocess.run")
-def test_agy_runner_successful_execution(mock_run, mock_which, tmp_path):
+def test_agy_runner_successful_execution(
+    mock_run, mock_which, tmp_path, caplog: pytest.LogCaptureFixture
+):
     patchset_dir = tmp_path / "patchset"
     patchset_dir.mkdir()
     report_file = tmp_path / "report.md"
@@ -83,7 +86,8 @@ def test_agy_runner_successful_execution(mock_run, mock_which, tmp_path):
     mock_run.side_effect = side_effect
 
     runner = AgyAgentRunner(cmd="agy", timeout_seconds=120)
-    runner.run_analysis(patchset_dir, report_file)
+    with caplog.at_level(logging.INFO):
+        runner.run_analysis(patchset_dir, report_file)
 
     mock_run.assert_called_once()
     args, kwargs = mock_run.call_args
@@ -96,6 +100,7 @@ def test_agy_runner_successful_execution(mock_run, mock_which, tmp_path):
     assert kwargs.get("timeout") == 120
     assert kwargs.get("capture_output") is True
     assert kwargs.get("text") is True
+    assert "Executing command: agy --dangerously-skip-permissions -p" in caplog.text
 
 
 @patch("shutil.which", return_value="/usr/bin/agy")
@@ -216,7 +221,9 @@ def test_opencode_runner_executable_not_found(tmp_path):
 
 @patch("shutil.which", return_value="/usr/bin/opencode")
 @patch("subprocess.run")
-def test_opencode_runner_successful_execution(mock_run, mock_which, tmp_path):
+def test_opencode_runner_successful_execution(
+    mock_run, mock_which, tmp_path, caplog: pytest.LogCaptureFixture
+):
     patchset_dir = tmp_path / "patchset"
     patchset_dir.mkdir()
     report_file = tmp_path / "report.md"
@@ -228,7 +235,8 @@ def test_opencode_runner_successful_execution(mock_run, mock_which, tmp_path):
     mock_run.side_effect = side_effect
 
     runner = OpenCodeAgentRunner(cmd="opencode", timeout_seconds=180)
-    runner.run_analysis(patchset_dir, report_file)
+    with caplog.at_level(logging.INFO):
+        runner.run_analysis(patchset_dir, report_file)
 
     mock_run.assert_called_once()
     args, kwargs = mock_run.call_args
@@ -239,6 +247,7 @@ def test_opencode_runner_successful_execution(mock_run, mock_which, tmp_path):
     assert str(patchset_dir.resolve()) in args[0][3]
     assert str(report_file.resolve()) in args[0][3]
     assert kwargs.get("timeout") == 180
+    assert "Executing command: opencode run --auto" in caplog.text
 
 
 @patch("shutil.which", return_value="/usr/bin/opencode")

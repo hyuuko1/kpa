@@ -1,5 +1,5 @@
-from __future__ import annotations
-
+import logging
+import shlex
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from kp.config import AgentConfig
+
+logger = logging.getLogger(__name__)
 
 
 class AgentError(Exception):
@@ -86,6 +88,7 @@ class AgyAgentRunner(BaseAgentRunner):
             prompt = base_prompt
 
         args = [self.cmd, "--dangerously-skip-permissions", "-p", prompt]
+        logger.info("Executing command: %s", shlex.join(args))
 
         try:
             res = subprocess.run(
@@ -149,6 +152,7 @@ class OpenCodeAgentRunner(BaseAgentRunner):
             prompt = base_prompt
 
         args = [self.cmd, "run", "--auto", prompt]
+        logger.info("Executing command: %s", shlex.join(args))
 
         try:
             res = subprocess.run(

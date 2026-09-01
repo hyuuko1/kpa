@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 import re
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Optional
 from kp.config import B4Config
+
+logger = logging.getLogger(__name__)
 
 
 class B4NotFoundError(Exception):
@@ -72,6 +76,7 @@ class B4Client:
         if mbox_name:
             cmd.extend(["-n", mbox_name])
         cmd.append(msgid)
+        logger.info("Executing command: %s", shlex.join(cmd))
 
         try:
             res = subprocess.run(

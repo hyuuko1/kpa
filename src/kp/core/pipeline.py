@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -11,6 +12,8 @@ from kp.core.aggregator import PatchsetAggregator
 from kp.storage.session import SessionManager
 from kp.storage.paths import get_clean_id
 from kp.models import RunManifest, RawMessage, RunRecord, PatchsetRecord, PatchsetStatus
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineResult(BaseModel):
@@ -33,10 +36,10 @@ class FetchPipeline:
         self.session_manager = SessionManager(config.storage)
 
     def clean_query_key(self, query: str) -> str:
-        """剥离 d: 时间过滤及多余逻辑操作符并规范化空白字符作为稳定的 query_key"""
-        pure = re.sub(r"\bAND\s+d:[^\s\"]+", "", query, flags=re.IGNORECASE)
-        pure = re.sub(r"\bd:[^\s\"]+\s+AND\b", "", pure, flags=re.IGNORECASE)
-        pure = re.sub(r"\bd:[^\s\"]+", "", pure)
+        """剥离 dt: / d: 时间过滤及多余逻辑操作符并规范化空白字符作为稳定的 query_key"""
+        pure = re.sub(r"\bAND\s+dt?:[^\s\"]+", "", query, flags=re.IGNORECASE)
+        pure = re.sub(r"\bdt?:[^\s\"]+\s+AND\b", "", pure, flags=re.IGNORECASE)
+        pure = re.sub(r"\bdt?:[^\s\"]+", "", pure)
         pure = re.sub(r"\b(AND|OR)\s+(AND|OR)\b", r"\1", pure, flags=re.IGNORECASE)
         pure = re.sub(r"^\s*(AND|OR)\b", "", pure, flags=re.IGNORECASE)
         pure = re.sub(r"\b(AND|OR)\s*$", "", pure, flags=re.IGNORECASE)
@@ -45,8 +48,8 @@ class FetchPipeline:
     def _parse_start_date_from_query(
         self, query: str, now_dt: datetime
     ) -> Optional[datetime]:
-        """从 query 中的 d: 表达式解析起始时间"""
-        match = re.search(r"\bd:([^\s\"]+)", query)
+        """从 query 中的 dt: 表达式解析起始时间"""
+        match = re.search(r"\bdt:([^\s\"]+)", query)
         if not match:
             return None
         expr = match.group(1).rstrip(".")
@@ -126,9 +129,9 @@ class FetchPipeline:
                 start_str = chunk_start.strftime("%Y-%m-%dT%H:%M:%SZ")
                 end_str = chunk_end.strftime("%Y-%m-%dT%H:%M:%SZ")
                 if query_key:
-                    sub_query = f"{query_key} d:{start_str}..{end_str}"
+                    sub_query = f"{query_key} AND dt:{start_str}..{end_str}"
                 else:
-                    sub_query = f"d:{start_str}..{end_str}"
+                    sub_query = f"dt:{start_str}..{end_str}"
 
                 batch_msgs = self.lore_client.query(sub_query)
                 all_raw_msgs.extend(batch_msgs)

@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import subprocess
 from unittest.mock import MagicMock, patch
@@ -42,13 +43,18 @@ def test_b4_not_found(mock_which):
 
 @patch("shutil.which", return_value="/usr/bin/b4")
 @patch("subprocess.run")
-def test_fetch_thread_success(mock_run, mock_which, tmp_path):
+def test_fetch_thread_success(
+    mock_run, mock_which, tmp_path, caplog: pytest.LogCaptureFixture
+):
     mock_run.return_value = MagicMock(returncode=0, stdout="Downloaded", stderr="")
     target_mbox = tmp_path / "series.mbx"
     target_mbox.write_text("From xxx\nSubject: test\n", encoding="utf-8")
 
     client = B4Client(B4Config(timeout_seconds=30))
-    result_path = client.fetch_thread("test@msgid", tmp_path, mbox_name="series.mbx")
+    with caplog.at_level(logging.INFO):
+        result_path = client.fetch_thread(
+            "test@msgid", tmp_path, mbox_name="series.mbx"
+        )
 
     assert result_path == target_mbox
     mock_run.assert_called_once()
@@ -58,6 +64,8 @@ def test_fetch_thread_success(mock_run, mock_which, tmp_path):
     assert "test@msgid" in args
     assert "-o" in args
     assert str(tmp_path) in args
+    assert "Executing command: /usr/bin/b4 mbox -o" in caplog.text
+    assert "test@msgid" in caplog.text
 
 
 @patch("shutil.which", return_value="/usr/bin/b4")
