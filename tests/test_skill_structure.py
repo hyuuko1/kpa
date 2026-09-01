@@ -26,3 +26,4 @@ def test_skill_files_exist():
     assert "Memory & Lifecycle" in analysis_content
     assert "Regressions & Impact" in analysis_content
     assert "Community Discussion & Key Debates" in analysis_content
+    assert "https://lore.kernel.org/all/<id>" in analysis_content

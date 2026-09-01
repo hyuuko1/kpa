@@ -81,7 +81,6 @@ uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND dt:2.hours.ago.."
 [
   {
     "id": "20260830120000.12345-1-author@example.com",
-    "title": "[PATCH v2 0/2] mm/example: optimize memory allocation throughput",
     "score": 88,
     "recommend": true,
     "reason": "重构内存分配与回收路径，减少锁竞争并提升并发吞吐，具备较高技术价值"

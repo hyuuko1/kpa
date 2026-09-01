@@ -79,7 +79,7 @@ description: "Linux 内核补丁初筛打分、下载解包与 AI 深度技术�
 `kp fetch` 底层调用 `lei q`。构建查询语句时必须遵循以下规则与最佳实践：
 
 1. **强制安全时间跨度限制**：查询条件中**必须**包含 `dt:` 时间过滤（除非启用 `--since-last`，此时系统会自动注入时间区间）。使用日期时间时，应确保有 `AND` 连接 `dt:` 语句。
-   - 相对时间：`dt:2.hours.ago..`、`dt:24.hours.ago..`、`dt:48.hours.ago..`、`dt:1.day.ago..`
+   - 相对时间：`dt:2.hours.ago..`、`dt:24.hours.ago..`、`dt:48.hours.ago..`、`dt:1.days.ago..`
    - 绝对时间：`dt:2026-08-31T08:00:00Z..2026-08-31T10:00:00Z`
 2. **过滤回复邮件**：建议始终加上 `NOT s:Re`，避免拉取重复的单封回复邮件。
 3. **子系统过滤两大核心范式 (List vs. Diff Path)**：

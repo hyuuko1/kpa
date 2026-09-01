@@ -7,14 +7,14 @@
 ## 1. 输入数据源
 
 在筛选阶段，Agent 需要读取当前会话抓取到的元数据文件：
-- `data/runs/<run_id>/patchsets.json` (或 `data/runs/<run_id>/manifest.json`)
+- `data/runs/<run_id>/patchsets.json`
 
 文件中包含该批次抓取的所有补丁集列表，每个补丁集包含：
-- `id` / `msgid`: 邮件 Message-ID / 补丁集唯一标识
+- `id`: 邮件 Message-ID / 补丁集唯一标识
 - `title`: 补丁集标题 (包含 `[PATCH vX ...]` 等前缀)
 - `author_name` / `author_email`: 提交者姓名与邮箱
 - `date`: 提交时间
-- `patches`: 包含的子补丁列表 (序号、标题、msgid)
+- `patches`: 包含的子补丁列表
 
 ---
 
@@ -60,8 +60,7 @@
 ```
 
 ### 字段说明
-- `id` (string, 必需): 对应 `patchsets.json` 中的 `id` 或 `msgid` (全局唯一 Message-ID)
+- `id` (string, 必需): 对应 `patchsets.json` 中的 `id` (全局唯一 Message-ID)
 - `score` (integer, 必需): 0 到 10 之间的整数评分
 - `recommend` (boolean, 必需): 是否推荐下载并进入后续深度分析 (建议分值 >= 7 时设为 `true`)
 - `reason` (string, 必需): 简明扼要的推荐或不推荐理由
-

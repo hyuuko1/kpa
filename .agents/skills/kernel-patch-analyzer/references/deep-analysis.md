@@ -6,14 +6,14 @@
 
 ## 1. 补丁集直读文件结构
 
-在分析阶段，目标补丁集已被解构为直读友好文件，位于目录：
-`data/runs/<run_id>/patchsets/<sanitized_id>/`
+在分析阶段，目标补丁集已被解构为直读友好文件，位于全局资产库目录：
+`data/patchsets/YYYY-MM/<clean_id>/`
 
 Agent 可直接读取以下文件，无需额外解析：
 - `00-cover-letter.md`：系列背景说明、整体动机与总体 Diffstat；
 - `discussions.md`：社区 Maintainer / Reviewer 的审阅评论与辩论树；
 - `patches/`：独立的代码补丁文件（如 `0001-xxx.patch`，包含完整的 Commit Message、Trailers 与统一 Diff）；
-- `meta.json`：轻量级索引元数据。
+- `meta.json`：轻量级索引元数据（包含补丁集代表性 Message-ID `id`）。
 
 ---
 
@@ -50,8 +50,8 @@ Agent 可直接读取以下文件，无需额外解析：
 
 ## 3. 分析报告标准模板
 
-分析完成后，必须将深度分析报告保存至以下路径：
-`data/runs/<run_id>/reports/<sanitized_id>.md`
+分析完成后，必须将深度分析报告保存至全局报告库路径：
+`data/reports/YYYY-MM/<clean_id>.md`
 
 报告格式与结构如下：
 
@@ -59,6 +59,7 @@ Agent 可直接读取以下文件，无需额外解析：
 # 补丁集深度技术分析: [<patchset_title>] (<sanitized_id>)
 
 ## 1. 摘要与背景评述 (Executive Summary)
+- **补丁集链接**: https://lore.kernel.org/all/<id>
 - **所属子系统**: <Subsystem>
 - **核心动机**: <简述为何需要该补丁集>
 - **变更规模**: <补丁数量、代码增删行数、影响文件范围>
