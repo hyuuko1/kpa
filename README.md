@@ -49,6 +49,9 @@ cd kp
 
 # 使用 uv 同步依赖与虚拟环境
 uv sync
+
+# 安装
+uv tool install -e .
 ```
 
 ---
@@ -59,7 +62,7 @@ uv sync
 
 ```bash
 # 查询最近 2 小时 linux-mm 邮件列表中的新补丁集
-uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND dt:2.hours.ago.."
+kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND dt:2.hours.ago.."
 ```
 
 执行后将输出会话 ID 与会话目录：
@@ -92,13 +95,13 @@ uv run kp fetch --query "l:linux-mm.kvack.org AND NOT s:Re AND dt:2.hours.ago.."
 
 ```bash
 # 方式 A：根据 AI 评审文件自动筛选并拉取高分 Patchset（默认 min-score 70）
-uv run kp download --run-id 20260830_141211 --input reviews.json --min-score 80
+kp download --run-id 20260830_141211 --input reviews.json --min-score 80
 
 # 方式 B：直接指定 Patchset Message-ID 进行拉取与拆解（支持指定多个 --id）
-uv run kp download --run-id 20260830_141211 --id 20260830120000.12345-1-author@example.com
+kp download --run-id 20260830_141211 --id 20260830120000.12345-1-author@example.com
 
 # 方式 C：通过标准输入管道传入评审 JSON
-cat reviews.json | uv run kp download --run-id 20260830_141211 --input -
+cat reviews.json | kp download --run-id 20260830_141211 --input -
 ```
 
 ### 4. 阶段三：AI 深度技术剖析与报告生成 (`kp analyze`)
@@ -107,22 +110,22 @@ cat reviews.json | uv run kp download --run-id 20260830_141211 --input -
 
 ```bash
 # 4.1 预检（Dry Run）：检查待分析补丁集直读文件完整性，不触发 Agent
-uv run kp analyze --run-id 20260830_141211 --dry-run
+kp analyze --run-id 20260830_141211 --dry-run
 
 # 4.2 全量深度分析：调用默认 Agent (agy) 分析该会话下所有已下载补丁集
-uv run kp analyze --run-id 20260830_141211
+kp analyze --run-id 20260830_141211
 
 # 4.3 指定补丁集 ID 与指定 Agent / 并发度：
-uv run kp analyze --run-id 20260830_141211 \
+kp analyze --run-id 20260830_141211 \
     --id 20260830120000.12345-1-author@example.com \
     --agent agy \
     --concurrency 2
 
 # 4.4 使用 opencode 运行分析：
-uv run kp analyze --run-id 20260830_141211 --agent opencode
+kp analyze --run-id 20260830_141211 --agent opencode
 
 # 4.5 强制重新分析（默认会自动跳过已生成有效报告的补丁集）：
-uv run kp analyze --run-id 20260830_141211 --force
+kp analyze --run-id 20260830_141211 --force
 
 ```
 
@@ -138,7 +141,7 @@ uv run kp analyze --run-id 20260830_141211 --force
    - 当前对话 Agent 查阅 [`references/screening.md`](.agents/skills/kernel-patch-analyzer/references/screening.md)；
    - 对 `data/runs/<run_id>/patchsets.json` 各补丁集按 4 大维度（子系统重要性、改动规模、代码成熟度、维护者关注度）进行 0-100 分量化打分并生成 `reviews.json`。
 2. **深度分析阶段 (Deep Technical Analysis)**：
-   - 调度命令：运行 `uv run kp analyze --run-id <run_id>`；
+   - 调度命令：运行 `kp analyze --run-id <run_id>`；
    - 由 `kp analyze` 调度外部 Agent 子进程，查阅 [`references/deep-analysis.md`](.agents/skills/kernel-patch-analyzer/references/deep-analysis.md)；
    - 结合补丁集直读文件（`00-cover-letter.md`、`discussions.md`、`patches/*.patch`）与本地 Linux 内核源码树，从 **5 大分析维度**（背景动机与架构设计、锁与并发安全、内存与资源生命周期、潜在回归与性能/兼容性风险、社区审阅洞察与争议点）撰写深度分析报告并写入 `data/runs/<run_id>/reports/<sanitized_id>.md`。
 

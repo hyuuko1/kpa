@@ -10,7 +10,8 @@
 系统通过分阶段流水线，完成从 LKML / lore.kernel.org 抓取补丁、AI 价值打分筛选、完整邮件线程拉取与结构化清洗，到最终供 AI 深度技术分析的全流程。
 
 - **核心技术栈**: Python >=3.10, Pydantic v2, Click, pytest, `b4`, `lei`。
-- **环境要求**: 包管理必须使用 `uv`（如 `uv run pytest`, `uv run kp`）。
+- **环境要求**: 包管理使用 `uv`。
+  - 本项目使用 `uv tool install -e .` 安装，若修改了 pyproject.toml，必须重新 `uv tool install -e .` 安装。
 - **隔离原则**: 严格禁止参考或访问 `/code/agent` 下的其他项目。
 
 ---
